@@ -88,6 +88,13 @@
   .tag { font-size:10px; font-weight:400; padding:1px 7px; border-radius:10px;
          border:1px solid var(--line); color:var(--faint); margin-left:6px; }
   .tag.rec { color:var(--ok); border-color:#1e5236; }
+  .recolor { margin-top:10px; padding:10px; background:var(--panel2); border:1px solid var(--line); border-radius:6px; }
+  .swatch { width:22px; height:22px; border-radius:4px; border:1px solid var(--line); display:inline-block; }
+  .sl { display:grid; grid-template-columns:76px 1fr 52px; gap:8px; align-items:center; margin-bottom:5px;
+        color:var(--dim); font-size:12px; }
+  .sl input[type=range] { width:100%; accent-color:var(--accent); }
+  .sl b { font-family:ui-monospace,monospace; font-size:11px; color:var(--fg); text-align:right; font-weight:400; }
+  #tex-canvas.picking { cursor:crosshair; }
 </style>
 </head>
 <body>
@@ -137,6 +144,26 @@
           <span id="uv-count"></span>
         </div>
         <div class="canvas-wrap"><canvas id="tex-canvas"></canvas></div>
+
+        <div class="recolor" id="recolor">
+          <div class="row-tools" style="margin:0 0 8px">
+            <button class="btn ghost" id="btn-pick">Pick a colour&hellip;</button>
+            <span class="swatch" id="rc-swatch" hidden></span>
+            <span class="muted" id="rc-count"></span>
+          </div>
+          <div id="rc-controls" hidden>
+            <label class="sl"><span>hue</span><input type="range" id="rc-hue" min="-180" max="180" value="0"><b id="rc-hue-v">0&deg;</b></label>
+            <label class="sl"><span>saturation</span><input type="range" id="rc-sat" min="0" max="200" value="100"><b id="rc-sat-v">100%</b></label>
+            <label class="sl"><span>brightness</span><input type="range" id="rc-val" min="30" max="200" value="100"><b id="rc-val-v">100%</b></label>
+            <label class="sl"><span>range</span><input type="range" id="rc-tol" min="1" max="30" value="6"><b id="rc-tol-v">0.06</b></label>
+            <div class="row-tools" style="margin:8px 0 0">
+              <label class="opt"><input type="checkbox" id="rc-showsel" checked> show selection</label>
+              <button class="btn" id="rc-apply">Apply</button>
+              <button class="btn ghost" id="rc-cancel">Cancel</button>
+            </div>
+          </div>
+        </div>
+
         <div class="row-tools" style="margin-top:10px">
           <label class="btn ghost" style="cursor:pointer">
             Replace with image…<input type="file" id="replace-input" accept="image/*" style="display:none">
@@ -1032,6 +1059,139 @@ function makeZip(files) {
 }
 
 
+// ===== src/recolor.js =====
+// In-tool recolour: pick a colour, shift everything like it.
+//
+// This is the "I just want the jacket in red" path. It exists because forcing a round trip
+// through an image editor for a hue swap is absurd overhead for the most common edit
+// anyone will make.
+//
+// Selection is by HUE PROXIMITY rather than RGB distance. A garment in shadow and the same
+// garment in light are far apart in RGB but nearly identical in hue, so an RGB threshold
+// either misses the shaded folds or swallows the skin next to it. Hue distance selects the
+// whole garment across its full range of lighting, which is exactly what a recolour wants.
+
+function rgbToHsv(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0;
+  if (d) {
+    if (mx === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+    else if (mx === g) h = ((b - r) / d + 2) / 6;
+    else h = ((r - g) / d + 4) / 6;
+  }
+  return [h, mx ? d / mx : 0, mx];
+}
+
+function hsvToRgb(h, s, v) {
+  h = ((h % 1) + 1) % 1;
+  const i = Math.floor(h * 6), f = h * 6 - i;
+  const p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
+  let r, g, b;
+  switch (i % 6) {
+    case 0: r = v; g = t; b = p; break;
+    case 1: r = q; g = v; b = p; break;
+    case 2: r = p; g = v; b = t; break;
+    case 3: r = p; g = q; b = v; break;
+    case 4: r = t; g = p; b = v; break;
+    default: r = v; g = p; b = q;
+  }
+  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+}
+
+/** Shortest distance between two hues on the 0..1 wheel. */
+const hueDist = (a, b) => {
+  const d = Math.abs(a - b) % 1;
+  return d > 0.5 ? 1 - d : d;
+};
+
+/**
+ * Which pixels count as "the thing you clicked".
+ * @param {ImageData} img
+ * @param {[number,number,number]} target  picked RGB
+ * @param {{tolerance:number, minSat:number}} o
+ *        tolerance 0..1 as a fraction of the hue wheel (0.055 ~ 20 degrees); minSat guards
+ *        against grey pixels, whose hue is meaningless and which would otherwise all match
+ *        at once.
+ *
+ *        The default is deliberately tight. Red fabric and tan skin sit only ~17 degrees
+ *        apart, so a generous tolerance quietly recolours the wearer along with the
+ *        garment -- which is why the UI shows the live selection rather than trusting a
+ *        number.
+ * @returns {Uint8Array} 1 per selected pixel
+ */
+function buildMask(img, target, { tolerance = 0.055, minSat = 0.15 } = {}) {
+  const [th, ts] = rgbToHsv(target[0], target[1], target[2]);
+  const n = img.width * img.height;
+  const mask = new Uint8Array(n);
+  const d = img.data;
+  // A greyish target cannot be matched by hue at all, so fall back to RGB proximity --
+  // otherwise picking a white shirt selects the entire image.
+  const greyTarget = ts < minSat;
+  for (let i = 0; i < n; i++) {
+    const r = d[i * 4], g = d[i * 4 + 1], b = d[i * 4 + 2];
+    if (greyTarget) {
+      const dr = r - target[0], dg = g - target[1], db = b - target[2];
+      if (Math.sqrt(dr * dr + dg * dg + db * db) <= tolerance * 441) mask[i] = 1;
+      continue;
+    }
+    const [h, s] = rgbToHsv(r, g, b);
+    if (s >= minSat && hueDist(h, th) <= tolerance) mask[i] = 1;
+  }
+  return mask;
+}
+
+/**
+ * Apply a shift to the masked pixels.
+ * Saturation and value are MULTIPLIED, not replaced, so shading survives -- the whole
+ * reason a recolour looks like fabric rather than a paint bucket.
+ * @param {ImageData} src
+ * @param {Uint8Array} mask
+ * @param {{hue:number, sat:number, val:number}} o  hue in degrees, sat/val as multipliers
+ * @returns {ImageData}
+ */
+function applyShift(src, mask, { hue = 0, sat = 1, val = 1 } = {}) {
+  const out = cloneImage(src);
+  const d = out.data;
+  const dh = hue / 360;
+  for (let i = 0; i < mask.length; i++) {
+    if (!mask[i]) continue;
+    const [h, s, v] = rgbToHsv(d[i * 4], d[i * 4 + 1], d[i * 4 + 2]);
+    const [r, g, b] = hsvToRgb(h + dh, Math.min(1, s * sat), Math.min(1, v * val));
+    d[i * 4] = r; d[i * 4 + 1] = g; d[i * 4 + 2] = b;
+  }
+  return out;
+}
+
+/** Tint the unselected pixels down so the selection is obvious while adjusting. */
+function previewMask(src, mask) {
+  const out = cloneImage(src);
+  const d = out.data;
+  for (let i = 0; i < mask.length; i++) {
+    if (mask[i]) continue;
+    d[i * 4] = d[i * 4] * 0.25 + 10;
+    d[i * 4 + 1] = d[i * 4 + 1] * 0.25 + 12;
+    d[i * 4 + 2] = d[i * 4 + 2] * 0.25 + 20;
+  }
+  return out;
+}
+
+/** Copy an image, as an ImageData in a browser and a plain object in node -- the module
+ *  stays unit-testable without a DOM. */
+function cloneImage(src) {
+  const data = new Uint8ClampedArray(src.data);
+  return typeof ImageData === 'function'
+    ? new ImageData(data, src.width, src.height)
+    : { data, width: src.width, height: src.height };
+}
+
+const maskCount = (mask) => {
+  let n = 0;
+  for (let i = 0; i < mask.length; i++) n += mask[i];
+  return n;
+};
+
+
 // ===== src/preview.js =====
 // Textured 3D preview. Raw WebGL, no three.js -- the tool has to stay one self-contained
 // file with no network access, and this needs exactly one shader.
@@ -1289,6 +1449,7 @@ export async function boot() {
   $('#btn-ucfx').addEventListener('click', exportUcfx);
   $('#btn-modkit').addEventListener('click', exportModkit);
   $('#btn-png').addEventListener('click', exportPng);
+  wireRecolor();
   window.addEventListener('resize', () => preview.draw());
   status('Drop an export-bundle folder to begin.');
 }
@@ -1394,9 +1555,12 @@ function currentImage() {
   return rec ? (rec.edited || rec.original) : null;
 }
 
-function drawTexture() {
+function drawTexture() { drawImage(currentImage()); }
+
+/** Paint an image plus the UV overlay. Split out from drawTexture so the live recolour
+ *  preview goes through exactly the same path instead of a second, divergent one. */
+function drawImage(img) {
   const cv = $('#tex-canvas');
-  const img = currentImage();
   if (!img) { cv.width = cv.height = 1; return; }
   cv.width = img.width; cv.height = img.height;
   const ctx = cv.getContext('2d');
@@ -1578,6 +1742,110 @@ function fail(e) {
   $('#status').hidden = true;
   $('#error').hidden = false;
   $('#error').textContent = e.message || String(e);
+}
+
+// ---------------------------------------------------------------- recolour
+// Pick a colour on the sheet, shift everything like it. The most common edit anyone will
+// make, and it should not require leaving the tool.
+
+const RC = { picking: false, target: null, mask: null, base: null };
+
+function wireRecolor() {
+  $('#btn-pick').addEventListener('click', () => {
+    RC.picking = !RC.picking;
+    $('#tex-canvas').classList.toggle('picking', RC.picking);
+    $('#btn-pick').textContent = RC.picking ? '⏳ click the sheet…' : '🎨 Pick a colour…';
+  });
+  $('#tex-canvas').addEventListener('click', (e) => {
+    if (!RC.picking) return;
+    const cv = $('#tex-canvas');
+    const r = cv.getBoundingClientRect();
+    // The canvas is displayed scaled to fit, so map the click back to texel space.
+    const x = Math.floor(((e.clientX - r.left) / r.width) * cv.width);
+    const y = Math.floor(((e.clientY - r.top) / r.height) * cv.height);
+    const img = currentImage();
+    if (!img || x < 0 || y < 0 || x >= img.width || y >= img.height) return;
+    const i = (y * img.width + x) * 4;
+    RC.target = [img.data[i], img.data[i + 1], img.data[i + 2]];
+    RC.base = cloneImage(img);
+    RC.picking = false;
+    $('#tex-canvas').classList.remove('picking');
+    $('#btn-pick').textContent = '🎨 Pick another…';
+    $('#rc-swatch').hidden = false;
+    $('#rc-swatch').style.background = `rgb(${RC.target.join(',')})`;
+    $('#rc-controls').hidden = false;
+    recomputeMask();
+  });
+  for (const id of ['rc-hue', 'rc-sat', 'rc-val']) {
+    $('#' + id).addEventListener('input', renderRecolor);
+  }
+  $('#rc-tol').addEventListener('input', recomputeMask);
+  $('#rc-showsel').addEventListener('change', renderRecolor);
+  $('#rc-apply').addEventListener('click', applyRecolor);
+  $('#rc-cancel').addEventListener('click', cancelRecolor);
+}
+
+function recomputeMask() {
+  if (!RC.base || !RC.target) return;
+  const tol = Number($('#rc-tol').value) / 100;
+  $('#rc-tol-v').textContent = tol.toFixed(2);
+  RC.mask = buildMask(RC.base, RC.target, { tolerance: tol });
+  const n = maskCount(RC.mask);
+  const pct = (100 * n) / (RC.base.width * RC.base.height);
+  $('#rc-count').textContent = `${n.toLocaleString()} px selected (${pct.toFixed(1)}%)`;
+  renderRecolor();
+}
+
+/** Live preview straight onto the canvas and the 3D model. */
+function renderRecolor() {
+  if (!RC.base || !RC.mask) return;
+  const hue = Number($('#rc-hue').value);
+  const sat = Number($('#rc-sat').value) / 100;
+  const val = Number($('#rc-val').value) / 100;
+  $('#rc-hue-v').textContent = `${hue}°`;
+  $('#rc-sat-v').textContent = `${Math.round(sat * 100)}%`;
+  $('#rc-val-v').textContent = `${Math.round(val * 100)}%`;
+  const shifted = applyShift(RC.base, RC.mask, { hue, sat, val });
+  RC.preview = shifted;
+  // The 3D view always shows the real result; only the flat sheet dims the unselected
+  // pixels, so you can judge the selection and the colour at the same time.
+  drawImage($('#rc-showsel').checked ? previewMask(shifted, RC.mask) : shifted);
+  if (preview.ok) preview.setTexture(shifted);
+}
+
+function applyRecolor() {
+  if (!RC.preview) return cancelRecolor();
+  const rec = S.textures.get(S.selected);
+  rec.edited = RC.preview;
+  RC.base = cloneImage(RC.preview);          // stack further edits on the result
+
+  // Carry the picked colour through the same shift. Without this the target still names
+  // the ORIGINAL colour, which no longer exists in the image, so the selection empties to
+  // zero and the sliders stop doing anything -- with no visible reason why.
+  const [th, ts, tv] = rgbToHsv(RC.target[0], RC.target[1], RC.target[2]);
+  RC.target = hsvToRgb(
+    th + Number($('#rc-hue').value) / 360,
+    Math.min(1, ts * (Number($('#rc-sat').value) / 100)),
+    Math.min(1, tv * (Number($('#rc-val').value) / 100)));
+  $('#rc-swatch').style.background = `rgb(${RC.target.join(',')})`;
+
+  $('#rc-hue').value = 0; $('#rc-sat').value = 100; $('#rc-val').value = 100;
+  recomputeMask();
+  drawTexture(); pushToPreview(); renderExport(); renderList();
+  $('#btn-revert').disabled = false;
+  note('Recolour applied. Pick again to adjust another colour, or export.');
+}
+
+function cancelRecolor() {
+  RC.target = null; RC.mask = null; RC.base = null; RC.preview = null;
+  RC.picking = false;
+  $('#tex-canvas').classList.remove('picking');
+  $('#btn-pick').textContent = '🎨 Pick a colour…';
+  $('#rc-swatch').hidden = true;
+  $('#rc-controls').hidden = true;
+  $('#rc-count').textContent = '';
+  drawTexture(); pushToPreview();
+  note('');
 }
 
 

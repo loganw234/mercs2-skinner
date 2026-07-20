@@ -8,6 +8,7 @@ import { buildUcfxTexture, isPow2 } from '../texture.js';
 import { planExport, buildCommands, buildModkitMod, preflight, hex8, sanitizeAssetName } from '../export.js';
 import { setNameSource } from '../names.js';
 import { makeZip } from '../zip.js';
+import { buildMask, applyShift, previewMask, maskCount, cloneImage, rgbToHsv, hsvToRgb } from '../recolor.js';
 import { Preview } from '../preview.js';
 
 const $ = (s) => document.querySelector(s);
@@ -49,6 +50,7 @@ export async function boot() {
   $('#btn-ucfx').addEventListener('click', exportUcfx);
   $('#btn-modkit').addEventListener('click', exportModkit);
   $('#btn-png').addEventListener('click', exportPng);
+  wireRecolor();
   window.addEventListener('resize', () => preview.draw());
   status('Drop an export-bundle folder to begin.');
 }
@@ -154,9 +156,12 @@ function currentImage() {
   return rec ? (rec.edited || rec.original) : null;
 }
 
-function drawTexture() {
+function drawTexture() { drawImage(currentImage()); }
+
+/** Paint an image plus the UV overlay. Split out from drawTexture so the live recolour
+ *  preview goes through exactly the same path instead of a second, divergent one. */
+function drawImage(img) {
   const cv = $('#tex-canvas');
-  const img = currentImage();
   if (!img) { cv.width = cv.height = 1; return; }
   cv.width = img.width; cv.height = img.height;
   const ctx = cv.getContext('2d');
@@ -338,4 +343,108 @@ function fail(e) {
   $('#status').hidden = true;
   $('#error').hidden = false;
   $('#error').textContent = e.message || String(e);
+}
+
+// ---------------------------------------------------------------- recolour
+// Pick a colour on the sheet, shift everything like it. The most common edit anyone will
+// make, and it should not require leaving the tool.
+
+const RC = { picking: false, target: null, mask: null, base: null };
+
+function wireRecolor() {
+  $('#btn-pick').addEventListener('click', () => {
+    RC.picking = !RC.picking;
+    $('#tex-canvas').classList.toggle('picking', RC.picking);
+    $('#btn-pick').textContent = RC.picking ? '⏳ click the sheet…' : '🎨 Pick a colour…';
+  });
+  $('#tex-canvas').addEventListener('click', (e) => {
+    if (!RC.picking) return;
+    const cv = $('#tex-canvas');
+    const r = cv.getBoundingClientRect();
+    // The canvas is displayed scaled to fit, so map the click back to texel space.
+    const x = Math.floor(((e.clientX - r.left) / r.width) * cv.width);
+    const y = Math.floor(((e.clientY - r.top) / r.height) * cv.height);
+    const img = currentImage();
+    if (!img || x < 0 || y < 0 || x >= img.width || y >= img.height) return;
+    const i = (y * img.width + x) * 4;
+    RC.target = [img.data[i], img.data[i + 1], img.data[i + 2]];
+    RC.base = cloneImage(img);
+    RC.picking = false;
+    $('#tex-canvas').classList.remove('picking');
+    $('#btn-pick').textContent = '🎨 Pick another…';
+    $('#rc-swatch').hidden = false;
+    $('#rc-swatch').style.background = `rgb(${RC.target.join(',')})`;
+    $('#rc-controls').hidden = false;
+    recomputeMask();
+  });
+  for (const id of ['rc-hue', 'rc-sat', 'rc-val']) {
+    $('#' + id).addEventListener('input', renderRecolor);
+  }
+  $('#rc-tol').addEventListener('input', recomputeMask);
+  $('#rc-showsel').addEventListener('change', renderRecolor);
+  $('#rc-apply').addEventListener('click', applyRecolor);
+  $('#rc-cancel').addEventListener('click', cancelRecolor);
+}
+
+function recomputeMask() {
+  if (!RC.base || !RC.target) return;
+  const tol = Number($('#rc-tol').value) / 100;
+  $('#rc-tol-v').textContent = tol.toFixed(2);
+  RC.mask = buildMask(RC.base, RC.target, { tolerance: tol });
+  const n = maskCount(RC.mask);
+  const pct = (100 * n) / (RC.base.width * RC.base.height);
+  $('#rc-count').textContent = `${n.toLocaleString()} px selected (${pct.toFixed(1)}%)`;
+  renderRecolor();
+}
+
+/** Live preview straight onto the canvas and the 3D model. */
+function renderRecolor() {
+  if (!RC.base || !RC.mask) return;
+  const hue = Number($('#rc-hue').value);
+  const sat = Number($('#rc-sat').value) / 100;
+  const val = Number($('#rc-val').value) / 100;
+  $('#rc-hue-v').textContent = `${hue}°`;
+  $('#rc-sat-v').textContent = `${Math.round(sat * 100)}%`;
+  $('#rc-val-v').textContent = `${Math.round(val * 100)}%`;
+  const shifted = applyShift(RC.base, RC.mask, { hue, sat, val });
+  RC.preview = shifted;
+  // The 3D view always shows the real result; only the flat sheet dims the unselected
+  // pixels, so you can judge the selection and the colour at the same time.
+  drawImage($('#rc-showsel').checked ? previewMask(shifted, RC.mask) : shifted);
+  if (preview.ok) preview.setTexture(shifted);
+}
+
+function applyRecolor() {
+  if (!RC.preview) return cancelRecolor();
+  const rec = S.textures.get(S.selected);
+  rec.edited = RC.preview;
+  RC.base = cloneImage(RC.preview);          // stack further edits on the result
+
+  // Carry the picked colour through the same shift. Without this the target still names
+  // the ORIGINAL colour, which no longer exists in the image, so the selection empties to
+  // zero and the sliders stop doing anything -- with no visible reason why.
+  const [th, ts, tv] = rgbToHsv(RC.target[0], RC.target[1], RC.target[2]);
+  RC.target = hsvToRgb(
+    th + Number($('#rc-hue').value) / 360,
+    Math.min(1, ts * (Number($('#rc-sat').value) / 100)),
+    Math.min(1, tv * (Number($('#rc-val').value) / 100)));
+  $('#rc-swatch').style.background = `rgb(${RC.target.join(',')})`;
+
+  $('#rc-hue').value = 0; $('#rc-sat').value = 100; $('#rc-val').value = 100;
+  recomputeMask();
+  drawTexture(); pushToPreview(); renderExport(); renderList();
+  $('#btn-revert').disabled = false;
+  note('Recolour applied. Pick again to adjust another colour, or export.');
+}
+
+function cancelRecolor() {
+  RC.target = null; RC.mask = null; RC.base = null; RC.preview = null;
+  RC.picking = false;
+  $('#tex-canvas').classList.remove('picking');
+  $('#btn-pick').textContent = '🎨 Pick a colour…';
+  $('#rc-swatch').hidden = true;
+  $('#rc-controls').hidden = true;
+  $('#rc-count').textContent = '';
+  drawTexture(); pushToPreview();
+  note('');
 }

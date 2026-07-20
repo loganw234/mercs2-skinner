@@ -88,6 +88,13 @@
   .tag { font-size:10px; font-weight:400; padding:1px 7px; border-radius:10px;
          border:1px solid var(--line); color:var(--faint); margin-left:6px; }
   .tag.rec { color:var(--ok); border-color:#1e5236; }
+  .recolor { margin-top:10px; padding:10px; background:var(--panel2); border:1px solid var(--line); border-radius:6px; }
+  .swatch { width:22px; height:22px; border-radius:4px; border:1px solid var(--line); display:inline-block; }
+  .sl { display:grid; grid-template-columns:76px 1fr 52px; gap:8px; align-items:center; margin-bottom:5px;
+        color:var(--dim); font-size:12px; }
+  .sl input[type=range] { width:100%; accent-color:var(--accent); }
+  .sl b { font-family:ui-monospace,monospace; font-size:11px; color:var(--fg); text-align:right; font-weight:400; }
+  #tex-canvas.picking { cursor:crosshair; }
 </style>
 </head>
 <body>
@@ -137,6 +144,26 @@
           <span id="uv-count"></span>
         </div>
         <div class="canvas-wrap"><canvas id="tex-canvas"></canvas></div>
+
+        <div class="recolor" id="recolor">
+          <div class="row-tools" style="margin:0 0 8px">
+            <button class="btn ghost" id="btn-pick">Pick a colour&hellip;</button>
+            <span class="swatch" id="rc-swatch" hidden></span>
+            <span class="muted" id="rc-count"></span>
+          </div>
+          <div id="rc-controls" hidden>
+            <label class="sl"><span>hue</span><input type="range" id="rc-hue" min="-180" max="180" value="0"><b id="rc-hue-v">0&deg;</b></label>
+            <label class="sl"><span>saturation</span><input type="range" id="rc-sat" min="0" max="200" value="100"><b id="rc-sat-v">100%</b></label>
+            <label class="sl"><span>brightness</span><input type="range" id="rc-val" min="30" max="200" value="100"><b id="rc-val-v">100%</b></label>
+            <label class="sl"><span>range</span><input type="range" id="rc-tol" min="1" max="30" value="6"><b id="rc-tol-v">0.06</b></label>
+            <div class="row-tools" style="margin:8px 0 0">
+              <label class="opt"><input type="checkbox" id="rc-showsel" checked> show selection</label>
+              <button class="btn" id="rc-apply">Apply</button>
+              <button class="btn ghost" id="rc-cancel">Cancel</button>
+            </div>
+          </div>
+        </div>
+
         <div class="row-tools" style="margin-top:10px">
           <label class="btn ghost" style="cursor:pointer">
             Replace with image…<input type="file" id="replace-input" accept="image/*" style="display:none">

@@ -55,7 +55,7 @@ const t = {
   },
 };
 
-const SUITES = ['texture.test.js', 'export.test.js', 'bundle.test.js'];
+const SUITES = ['texture.test.js', 'export.test.js', 'bundle.test.js', 'recolor.test.js'];
 
 for (const s of SUITES) {
   if (filter && !s.includes(filter)) continue;

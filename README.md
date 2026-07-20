@@ -85,7 +85,7 @@ mercs2_workshop --export-bundle <character> --out mychar
 npm test
 ```
 
-75 assertions. The core one is byte-parity: `src/texture.js` is a port of the community
+95 assertions. The core one is byte-parity: `src/texture.js` is a port of the community
 project's `dds_to_ucfx_texture.py` (vendored under `tools/reference-python/`), which
 reverse-engineered the container layout and the fully-resident `INFO` flags — so **that
 script is the specification**, not this port.
@@ -162,7 +162,9 @@ Not affiliated with or endorsed by EA or Pandemic Studios.
 
 - **Normal maps.** Mercs2 stores them as **DXT5nm** with `normal.x` in the alpha channel;
   only the DXT1 diffuse path is implemented. Their `nm_to_ucfx_dxt5nm.py` handles it today.
-- **No painting in-tool** — you round-trip through your own image editor.
+- **No freehand painting in-tool.** There is a hue/saturation/brightness recolour, which
+  covers most recolour requests, but anything beyond that round-trips through your own
+  image editor.
 - **Neither install path has been run end to end.** The modkit definition matches its
   `TextureSwap {name, image_path}` contract as read from source, and the new-asset command
   block is generated from documented flags — but nobody has packed either and launched.
