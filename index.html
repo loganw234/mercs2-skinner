@@ -167,6 +167,12 @@
   .card.sel { border-color:var(--accent); outline:1px solid var(--accent); background:#1d2c47; }
   .card-t { font-weight:600; }
   .card-s { color:var(--dim); font-size:12px; line-height:1.45; }
+  /* The plain-language "for when you want..." line. Visually separated from the description
+     above it so it reads as a different KIND of statement -- intent, not mechanism. */
+  .card-eg { margin-top:auto; padding-top:9px; border-top:1px solid var(--line);
+             color:var(--faint); font-size:12px; line-height:1.45; font-style:italic;
+             width:100%; }
+  .card:hover .card-eg, .card.sel .card-eg { color:var(--dim); }
   .card-art { height:112px; display:flex; align-items:center; justify-content:center; }
 
   /* ---- the figures ---- */

@@ -44,20 +44,28 @@ export function allCharacters() {
   return CAT.donors.map((d) => ({ ...d, kind: 'clone' }));
 }
 
+// Each goal carries a plain-language `eg` as well as a description. The description says
+// what the option DOES, in the tool's own vocabulary -- "outfits", "textures", "clone" --
+// and someone who has never modded this game has no way to judge which of those they want.
+// The `eg` says what it is FOR, in a sentence with no jargon in it at all, so the choice can
+// be made on intent even when the terminology means nothing yet.
 const GOALS = {
   variants: {
     title: 'Add new outfits',
     sub: 'Extra skins that sit alongside the original. Nothing in the game changes until you choose to wear one.',
+    eg: 'For when you want the original to stay exactly as it is, but be able to spawn new versions of it too.',
     bodyQ: 'Which character?',
   },
   replace: {
     title: 'Change how someone looks',
     sub: "Repaint a character's own textures. Everyone who wears them changes.",
+    eg: 'For when you want every soldier of that type in the game to be wearing your new uniform.',
     bodyQ: 'Which character?',
   },
   swap: {
     title: "Wear someone else's outfit",
     sub: 'Put one character\'s clothing onto another. No painting at all — the tool does the work.',
+    eg: 'For when you want Chris in Allied fatigues, and you do not want to paint anything yourself.',
     bodyQ: 'Whose body are you dressing?',
   },
 };
@@ -92,6 +100,7 @@ function stepGoal(body) {
     b.appendChild(art);
     b.appendChild(el('div', 'card-t', g.title));
     b.appendChild(el('div', 'card-s', g.sub));
+    b.appendChild(el('div', 'card-eg', g.eg));
     b.addEventListener('click', () => {
       W.goal = id;
       W.body = W.donor = null;
