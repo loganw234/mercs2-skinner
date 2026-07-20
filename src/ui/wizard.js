@@ -64,6 +64,16 @@ export function buildWizard(root) {
         + 'single-block, meaning a clone keeps its full detail at distance.'));
     }
 
+    // Whether a ready-made template exists is the single most useful thing to know before
+    // choosing, since it decides whether you can start painting now or have to install the
+    // toolchain first. Marking it in the option label saves selecting each one to find out.
+    const withTpl = list.filter((c) => c.template && c.template.length).length;
+    if (withTpl) {
+      rest.appendChild(el('div', 'wz-note',
+        `${withTpl} of these ${list.length} have ready-made templates, marked ✓ — pick one `
+        + 'of those and you can start painting immediately, with no game tools at all.'));
+    }
+
     const sel = el('select');
     sel.id = 'wz-char';
     const byFaction = {};
@@ -72,8 +82,14 @@ export function buildWizard(root) {
     for (const f of Object.keys(byFaction).sort()) {
       const og = document.createElement('optgroup');
       og.label = f;
-      for (const c of byFaction[f]) {
-        const o = el('option', null, c.name + (c.sheets.length ? `   (${c.sheets.map((s) => s.part).join(', ')})` : ''));
+      // Template-ready first within each faction, so they are not buried.
+      const sorted = [...byFaction[f]].sort((a, b) =>
+        (b.template ? 1 : 0) - (a.template ? 1 : 0) || a.name.localeCompare(b.name));
+      for (const c of sorted) {
+        const n = (c.template || []).length;
+        const tpl = n ? `✓ ${n} template${n === 1 ? '' : 's'}` : 'no template';
+        const parts = c.sheets.length ? c.sheets.map((s) => s.part).join(', ') : '';
+        const o = el('option', null, `${c.name}   (${parts})   ${tpl}`);
         o.value = c.name;
         og.appendChild(o);
       }
@@ -112,12 +128,24 @@ function renderDetail(root, c, goal) {
   // and templates carry no artwork so they can just be handed over. Someone can start
   // designing right now and only install the toolchain when they have something to inject.
   if (c.template && c.template.length) {
+    const n = c.template.length;
     root.appendChild(el('div', 'wz-q', 'Start painting now — no install needed'));
     root.appendChild(el('div', 'wz-note',
-      `${c.template.length} ready-made templates for this character: every UV island filled `
-      + 'flat and coloured by the body part that drives it, so you can see what you are '
-      + 'painting. Open one in any image editor and go. You only need the game tools later, '
-      + 'to put the result back in.'));
+      `${n} ready-made template${n === 1 ? '' : 's'} for this character: every UV island `
+      + 'filled flat and coloured by the body part that drives it, so you can see what you '
+      + 'are painting. Open one in any image editor and go. You only need the game tools '
+      + 'later, to put the result back in.'));
+    // The catalogue lists sheets a character OWNS by name; templates cover the sheets its
+    // model actually PAINTS at the finest detail level. Those differ on low-detail NPCs
+    // that borrow a shared body sheet, and the gap is confusing unless it is named.
+    const painted = new Set(c.template.map((f) => f.replace('_SAFE.png', '')));
+    const missing = c.sheets.filter((s) => !painted.has(s.name)).map((s) => s.part);
+    if (missing.length) {
+      root.appendChild(el('div', 'wz-note',
+        `No template for its ${missing.join(', ')} sheet${missing.length === 1 ? '' : 's'} — `
+        + 'this model does not paint them at its finest detail level, usually because it '
+        + 'borrows a shared body texture. Export it below to work on those.'));
+    }
     const grid = el('div', 'wz-tpl');
     for (const f of c.template) {
       const a = el('a', 'wz-tpl-a', f.replace(c.name + '_', '').replace('_SAFE.png', ''));
