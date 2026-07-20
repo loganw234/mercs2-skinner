@@ -1,0 +1,51 @@
+[
+ {
+  "name": "pmc_hum_chris_ub",
+  "hash": "0x6BD49A52",
+  "w": 512,
+  "h": 512,
+  "tris": 21626
+ },
+ {
+  "name": "pmc_hum_chris_head",
+  "hash": "0xE870A185",
+  "w": 512,
+  "h": 512,
+  "tris": 16543
+ },
+ {
+  "name": "pmc_hum_chris_lb",
+  "hash": "0xA904A089",
+  "w": 512,
+  "h": 512,
+  "tris": 6705
+ },
+ {
+  "name": "pmc_hum_chris_eyes",
+  "hash": "0x82569011",
+  "w": 128,
+  "h": 128,
+  "tris": 688
+ },
+ {
+  "name": "tex_0x5AAB9E8A",
+  "hash": "0x5AAB9E8A",
+  "w": 64,
+  "h": 64,
+  "tris": 624
+ },
+ {
+  "name": "global_weapon_pistol",
+  "hash": "0x6A59794B",
+  "w": 128,
+  "h": 128,
+  "tris": 426
+ },
+ {
+  "name": "tex_0xE27C6F51",
+  "hash": "0xE27C6F51",
+  "w": 64,
+  "h": 128,
+  "tris": 3728
+ }
+]

@@ -19,6 +19,12 @@ white, triangle wireframe over the top. Paint onto this directly.
 
 `*_wire.png` — wireframe only, on transparency, for use as a top layer.
 
+Sheets are rendered at 3x and downsampled. A 512 head can carry 16,000+ triangles, about
+one per 16 pixels, and drawing every edge a pixel wide at final size buried up to 54% of
+the sheet under black lines. The interior wireframe also fades as density rises: crisp
+where the mesh is worth seeing, a soft tint where it would only be noise. Island
+boundaries stay hard white at every density, because those are the lines that matter.
+
 `_LEGEND.png` — colour to body region. The palette is the same for every character: left
 limbs green, right limbs gold, torso blue, legs purple/magenta, head warm. Islands inside
 one region vary slightly in lightness, so a head or hair sheet — where everything is driven

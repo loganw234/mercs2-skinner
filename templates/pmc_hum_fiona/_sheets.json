@@ -1,0 +1,58 @@
+[
+ {
+  "name": "pmc_hum_fiona_lb",
+  "hash": "0x33C678E5",
+  "w": 512,
+  "h": 512,
+  "tris": 4685
+ },
+ {
+  "name": "pmc_hum_fiona_head",
+  "hash": "0x2878B8A9",
+  "w": 512,
+  "h": 512,
+  "tris": 5662
+ },
+ {
+  "name": "pmc_hum_fiona_ub",
+  "hash": "0xA36C907E",
+  "w": 512,
+  "h": 512,
+  "tris": 9674
+ },
+ {
+  "name": "pmc_hum_fiona_eyelash",
+  "hash": "0x3A2D72A6",
+  "w": 64,
+  "h": 32,
+  "tris": 691
+ },
+ {
+  "name": "tex_0xE27C6F51",
+  "hash": "0xE27C6F51",
+  "w": 64,
+  "h": 128,
+  "tris": 1862
+ },
+ {
+  "name": "pmc_hum_fiona_hair",
+  "hash": "0xFAD34333",
+  "w": 256,
+  "h": 256,
+  "tris": 4856
+ },
+ {
+  "name": "pmc_hum_fiona_eyes",
+  "hash": "0x2D237115",
+  "w": 128,
+  "h": 128,
+  "tris": 284
+ },
+ {
+  "name": "tex_0x5AAB9E8A",
+  "hash": "0x5AAB9E8A",
+  "w": 64,
+  "h": 64,
+  "tris": 312
+ }
+]

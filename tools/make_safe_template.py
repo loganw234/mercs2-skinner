@@ -151,7 +151,20 @@ def build(bundle, out_dir, skeletons):
         if tri_count < 250:
             continue
 
-        img = Image.new("RGB", (Wd, Ht), (18, 22, 30))
+        # Supersample, then downsample at the end. A 512 head sheet can carry 16,000+
+        # triangles -- about one per 16 pixels -- and drawing every edge one pixel wide at
+        # final size buried up to 54% of the sheet under black lines. Rendering large and
+        # shrinking turns that from aliased mush into a soft tint that still reads as
+        # "dense here" without hiding what you are painting.
+        SS = 3
+        SW, SH = Wd * SS, Ht * SS
+        # Density decides how hard the interior wireframe is drawn. Below ~1 triangle per
+        # 40 target pixels it is genuine information; well above that it is noise, so it
+        # fades toward the fill colour rather than being drawn as a hard line.
+        density = tri_count / float(Wd * Ht)
+        fade = max(0.0, min(1.0, (density - 0.006) / 0.05))
+
+        img = Image.new("RGB", (SW, SH), (18, 22, 30))
         d = ImageDraw.Draw(img)
 
         for uv, ix, J, W in parts:
@@ -181,15 +194,18 @@ def build(bundle, out_dir, skeletons):
                 return tuple(max(0, min(255, int(ch * f))) for ch in base)
 
             for i in range(0, len(ix) - 2, 3):
-                pts = [(uv[ix[i + k]][0] * Wd, uv[ix[i + k]][1] * Ht) for k in range(3)]
+                pts = [(uv[ix[i + k]][0] * SW, uv[ix[i + k]][1] * SH) for k in range(3)]
                 root = dsu.find(ix[i])
                 d.polygon(pts, fill=shade(CMAP.get(reg.get(root, "other"), CMAP["other"]), root))
 
-        # wireframe over the flats
+        # Interior wireframe over the flats. Its darkness is scaled by `fade`: crisp on a
+        # sparse sheet where the mesh is worth seeing, nearly invisible on a dense one
+        # where it would just bury the fills.
+        wire_dark = tuple(int(20 + (110 - 20) * fade) for _ in range(3))
         for uv, ix, _, _ in parts:
             for i in range(0, len(ix) - 2, 3):
-                pts = [(uv[ix[i + k]][0] * Wd, uv[ix[i + k]][1] * Ht) for k in range(3)]
-                d.polygon(pts, outline=(20, 24, 32))
+                pts = [(uv[ix[i + k]][0] * SW, uv[ix[i + k]][1] * SH) for k in range(3)]
+                d.polygon(pts, outline=wire_dark)
         for uv, ix, _, _ in parts:
             edge = {}
             for i in range(0, len(ix) - 2, 3):
@@ -198,21 +214,22 @@ def build(bundle, out_dir, skeletons):
                     edge[e] = edge.get(e, 0) + 1
             for (a_, b_), cnt in edge.items():
                 if cnt == 1:      # island boundary: the line that matters when painting
-                    d.line([(uv[a_][0] * Wd, uv[a_][1] * Ht), (uv[b_][0] * Wd, uv[b_][1] * Ht)],
-                           fill=(255, 255, 255), width=max(1, Wd // 400))
+                    d.line([(uv[a_][0] * SW, uv[a_][1] * SH), (uv[b_][0] * SW, uv[b_][1] * SH)],
+                           fill=(255, 255, 255), width=max(SS, SW // 340))
 
+        img = img.resize((Wd, Ht), Image.LANCZOS)
         nm_out = NAMES.get(h.upper(), t.get("file", h).split("/")[-1].replace(".png", ""))
         img.save(os.path.join(out_dir, "%s_SAFE.png" % nm_out))
 
         # Wire-only layer on transparency: pure geometry, useful as a top layer in an
         # image editor. Also safe to redistribute -- there is no artwork in it.
-        wire = Image.new("RGBA", (Wd, Ht), (0, 0, 0, 0))
+        wire = Image.new("RGBA", (SW, SH), (0, 0, 0, 0))
         wd = ImageDraw.Draw(wire)
         for uv, ix, _, _ in parts:
             for i in range(0, len(ix) - 2, 3):
-                wd.polygon([(uv[ix[i + k]][0] * Wd, uv[ix[i + k]][1] * Ht) for k in range(3)],
+                wd.polygon([(uv[ix[i + k]][0] * SW, uv[ix[i + k]][1] * SH) for k in range(3)],
                            outline=(255, 64, 160, 220))
-        wire.save(os.path.join(out_dir, "%s_wire.png" % nm_out))
+        wire.resize((Wd, Ht), Image.LANCZOS).save(os.path.join(out_dir, "%s_wire.png" % nm_out))
         made.append((nm_out, h, Wd, Ht, tri_count))
         print("  %-30s %4dx%-4d %6d tris" % (nm_out, Wd, Ht, tri_count))
     return made

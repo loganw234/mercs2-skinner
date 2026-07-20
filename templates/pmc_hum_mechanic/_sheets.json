@@ -1,0 +1,86 @@
+[
+ {
+  "name": "pmc_hum_mechanic_head",
+  "hash": "0x1C394F9A",
+  "w": 512,
+  "h": 512,
+  "tris": 4036
+ },
+ {
+  "name": "pmc_hum_mechanic_lb",
+  "hash": "0x87F9725E",
+  "w": 512,
+  "h": 512,
+  "tris": 3585
+ },
+ {
+  "name": "pmc_hum_mechanic_ub",
+  "hash": "0x98529145",
+  "w": 512,
+  "h": 512,
+  "tris": 4871
+ },
+ {
+  "name": "pmc_hum_mechanic_hair",
+  "hash": "0xD889B9C8",
+  "w": 512,
+  "h": 512,
+  "tris": 4156
+ },
+ {
+  "name": "tex_0xFC1431D5",
+  "hash": "0xFC1431D5",
+  "w": 256,
+  "h": 256,
+  "tris": 1254
+ },
+ {
+  "name": "tex_0x7411ADBD",
+  "hash": "0x7411ADBD",
+  "w": 256,
+  "h": 256,
+  "tris": 1228
+ },
+ {
+  "name": "tex_0xDFCDA372",
+  "hash": "0xDFCDA372",
+  "w": 256,
+  "h": 256,
+  "tris": 1873
+ },
+ {
+  "name": "pmc_hum_jennifer_eyelashes",
+  "hash": "0x83E4A64E",
+  "w": 64,
+  "h": 32,
+  "tris": 699
+ },
+ {
+  "name": "tex_0xE27C6F51",
+  "hash": "0xE27C6F51",
+  "w": 64,
+  "h": 128,
+  "tris": 1862
+ },
+ {
+  "name": "tex_0xF32A4CF5",
+  "hash": "0xF32A4CF5",
+  "w": 128,
+  "h": 128,
+  "tris": 436
+ },
+ {
+  "name": "pr_hum_boss_eye",
+  "hash": "0x5EBD193E",
+  "w": 256,
+  "h": 256,
+  "tris": 284
+ },
+ {
+  "name": "tex_0x5AAB9E8A",
+  "hash": "0x5AAB9E8A",
+  "w": 64,
+  "h": 64,
+  "tris": 312
+ }
+]

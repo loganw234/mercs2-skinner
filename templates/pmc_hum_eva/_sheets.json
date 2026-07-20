@@ -1,0 +1,37 @@
+[
+ {
+  "name": "pmc_hum_eva_ub",
+  "hash": "0x646D71FF",
+  "w": 512,
+  "h": 512,
+  "tris": 10884
+ },
+ {
+  "name": "pmc_hum_eva_head",
+  "hash": "0x6463C9A0",
+  "w": 512,
+  "h": 512,
+  "tris": 4234
+ },
+ {
+  "name": "pmc_hum_eva_lb",
+  "hash": "0x74C5DDF0",
+  "w": 512,
+  "h": 512,
+  "tris": 7958
+ },
+ {
+  "name": "al_hum_officer_a_holster",
+  "hash": "0x60388732",
+  "w": 128,
+  "h": 128,
+  "tris": 738
+ },
+ {
+  "name": "pmc_hum_eva_hair",
+  "hash": "0xF7F6F6EA",
+  "w": 256,
+  "h": 256,
+  "tris": 467
+ }
+]
