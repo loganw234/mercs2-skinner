@@ -498,55 +498,127 @@ function planExport({ bundle, edits, skinName }) {
  *  block and stop being additive.
  */
 function buildCommands({ bundle, plan }) {
-  const lod = (bundle.manifest.lod_chain || [])[0];
-  const rawName = lod ? `block${lod.block}_P000.ucfx` : 'block<N>_P000.ucfx';
-  const CONT = ' \\';
-  const lines = [
-    `# ADDITIVE reskin of "${bundle.name}" — originals untouched, this is a NEW outfit.`,
-    `#`,
-    `# new model asset : ${plan.modelName}  ${hex8(plan.modelHash)}`,
+  // ★ The model container is already repointed and shipped in the zip, so there is no
+  // Python step any more. That mattered: the additive path is the one that CANNOT damage
+  // your game, so it should be the easiest, and it was the only one demanding an
+  // interpreter install before it would do anything at all.
+  const L = [
+    '@echo off',
+    'setlocal',
+    'rem ===========================================================================',
+    `rem  Install "${plan.modelName}" — a NEW outfit, added alongside the originals.`,
+    'rem',
+    'rem  Nothing in your game is modified. This builds a patch WAD containing only',
+    'rem  new assets under new names; the base game files are read and never written.',
+    'rem',
+    `rem   new model   : ${plan.modelName}  ${hex8(plan.modelHash)}`,
     ...plan.items.map((i) =>
-      `# new texture     : ${i.texName}  ${hex8(i.texHash)}   (was ${i.originalName || i.originalHash})`),
-    ``,
-    `# 1. Clone the donor's model container, repointing its material texture references.`,
-    `#    NOT inject_parts --repoint: that requires at least one --part, so it cannot`,
-    `#    express "same mesh, different textures". repoint_model.py rewrites only the`,
-    `#    4-byte hashes inside MTRL plus the trailing CSUM; every geometry byte is copied`,
-    `#    verbatim, and it re-verifies the result before writing.`,
-    `python repoint_model.py raw/${rawName} ${plan.modelName}.ucfx` + CONT,
+      `rem   new texture : ${i.texName}  ${hex8(i.texHash)}`),
+    'rem',
+    'rem  Double-click this file. If it cannot find the packer it will tell you where',
+    'rem  to get it.',
+    'rem ===========================================================================',
+    '',
+    'rem --- find the packer -------------------------------------------------',
+    'set "SM="',
+    'if exist "%~dp0mercs2_smuggler.exe" set "SM=%~dp0mercs2_smuggler.exe"',
+    'if not defined SM if defined MERCS2_SMUGGLER if exist "%MERCS2_SMUGGLER%" set "SM=%MERCS2_SMUGGLER%"',
+    'if not defined SM for %%X in (mercs2_smuggler.exe) do if not "%%~$PATH:X"=="" set "SM=%%~$PATH:X"',
+    'if not defined SM (',
+    '  echo.',
+    '  echo   Could not find mercs2_smuggler.exe',
+    '  echo   Put it next to this file, or set MERCS2_SMUGGLER to its full path.',
+    '  echo   Get it from the community toolchain releases:',
+    '  echo     https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/releases',
+    '  echo.',
+    '  pause',
+    '  exit /b 1',
+    ')',
+    '',
+    'rem --- find the game ---------------------------------------------------',
+    'set "WAD=%~1"',
+    'if "%WAD%"=="" set "WAD=C:\\Games\\Mercenaries 2 World in Flames\\data\\vz.wad"',
+    'if not exist "%WAD%" (',
+    '  echo.',
+    '  echo   Could not find vz.wad at:',
+    '  echo     %WAD%',
+    '  echo   Drag your vz.wad onto this .bat, or edit the path above.',
+    '  echo.',
+    '  pause',
+    '  exit /b 1',
+    ')',
+    '',
+    'rem --- pack ------------------------------------------------------------',
+    'rem --extra-only means "add blocks, never touch an existing one". That single flag',
+    'rem is what makes this additive rather than a replacement.',
+    'echo   packing...',
+    `"%SM%" --source-wad "%WAD%" --extra-only ^`,
   ];
-  plan.items.forEach((i, n) => {
-    lines.push(`    ${i.originalHash}:${hex8(i.texHash)}` + (n < plan.items.length - 1 ? CONT : ''));
-  });
-  lines.push(
-    ``,
-    `# 2. Pack every new asset into a patch WAD. --extra-only means "add blocks, never`,
-    `#    touch a donor block" — that flag is what keeps this additive.`,
-    `mercs2_smuggler --source-wad "<game>/data/vz.wad" --extra-only` + CONT,
-  );
   for (const i of plan.items) {
-    lines.push(`    --inject-extra ${hex8(i.texHash)}:27:${i.file}` + CONT);
+    L.push(`    --inject-extra ${hex8(i.texHash)}:27:"%~dp0${i.file}" ^`);
   }
-  lines.push(
-    `    --inject-extra ${hex8(plan.modelHash)}:19:${plan.modelName}.ucfx` + CONT,
-    `    -o ${plan.modelName}-patch.wad`,
-    ``,
-    `# 3. Install. Import the patch WAD in the modkit (it merges with your other mods), or`,
-    `#    if you have no other patch, drop it in as data/vz-patch.wad.`,
-    ``,
-    `# ⚠ DETAIL LOSS applies only to TWO-BLOCK characters -- confirmed in game.`,
-    `#   A model's ASET row packs its block reference as (block << 16) | sub, and for a`,
-    `#   character 'sub' is the index of a SECOND block holding the finer LOD rungs, or`,
-    `#   65535 for none. --inject-extra forces sub=65535, so a clone of a two-block`,
-    `#   character loses its finer rungs and renders its coarsest tier at ALL distances --`,
-    `#   the face visibly flattens.`,
-    `#   Characters with no second block clone at full detail. The tool marks which is`,
-    `#   which; see docs/LOD-CHAIN.md.`,
-    ``,
-    `# 4. Wear it in-game`,
-    `#    Player.SetOutfit(Player.GetLocalCharacter(), "${plan.modelName}")`,
+  L.push(
+    `    --inject-extra ${hex8(plan.modelHash)}:19:"%~dp0${plan.modelName}.ucfx" ^`,
+    `    -o "%~dp0${plan.modelName}-patch.wad"`,
+    '',
+    'if errorlevel 1 (',
+    '  echo.',
+    '  echo   Packing failed — see the message above.',
+    '  pause',
+    '  exit /b 1',
+    ')',
+    '',
+    'echo.',
+    `echo   Built ${plan.modelName}-patch.wad`,
+    'echo.',
+    'echo   Install it either way:',
+    'echo     - import it in the modkit ^(it merges with your other mods^), or',
+    'echo     - if you have no other mods, drop it in as data\\vz-patch.wad',
+    'echo.',
+    'echo   Then wear it in game:',
+    `echo     Player.SetOutfit^(Player.GetLocalCharacter^(^), "${plan.modelName}"^)`,
+    'echo.',
+    'echo   Only run that once the patch is installed and loaded. Asking the game for',
+    'echo   an outfit name it cannot find crashes it to desktop.',
+    'echo.',
+    'pause',
   );
-  return lines.join('\n');
+  return L.join('\r\n');
+}
+
+/** The same recipe as prose, for anyone not on Windows or reading before running. */
+function buildNotes({ bundle, plan }) {
+  return [
+    `"${plan.modelName}" — a NEW outfit for ${bundle.name}, added alongside the originals.`,
+    '',
+    'WHAT IS IN THIS ZIP',
+    `  ${plan.modelName}.ucfx        the model, already cloned and repointed at the new textures`,
+    ...plan.items.map((i) => `  ${i.file}${' '.repeat(Math.max(1, 28 - i.file.length))}new texture (${i.texName})`),
+    '  install.bat                    double-click this',
+    '',
+    'WHAT IT DOES',
+    '  Packs the files above into a patch WAD holding only NEW assets under NEW names.',
+    '  Your game files are read and never written. Nothing that already exists changes.',
+    '',
+    'IF YOU ARE NOT ON WINDOWS, the one command is:',
+    `  mercs2_smuggler --source-wad "<game>/data/vz.wad" --extra-only \\`,
+    ...plan.items.map((i) => `      --inject-extra ${hex8(i.texHash)}:27:${i.file} \\`),
+    `      --inject-extra ${hex8(plan.modelHash)}:19:${plan.modelName}.ucfx \\`,
+    `      -o ${plan.modelName}-patch.wad`,
+    '',
+    'WEARING IT',
+    `  Player.SetOutfit(Player.GetLocalCharacter(), "${plan.modelName}")`,
+    '  Only after the patch is installed and loaded — an outfit name the game cannot',
+    '  find crashes it to desktop, with no soft failure.',
+    '',
+    'A NOTE ON DETAIL',
+    "  A model's ASET row packs its block reference as (block << 16) | sub, and for a",
+    "  character 'sub' points at a SECOND block holding the finer LOD rungs, or 65535",
+    '  for none. --inject-extra forces sub=65535, so a copy of a two-block character',
+    '  loses its finer rungs and renders its coarsest tier at every distance — the face',
+    '  visibly flattens. Characters with no second block copy at full detail; the tool',
+    '  marks which is which. See docs/LOD-CHAIN.md.',
+  ].join('\r\n');
 }
 
 /**
@@ -1152,6 +1224,102 @@ function readDdsRgb(buf) {
   }
   return { width, height, rgb };
 }
+
+
+// ===== src/repoint.js =====
+// Clone a model container, repointing its texture references. Reskin only, no geometry.
+//
+// This is a port of tools/repoint_model.py, and it exists to delete a step. The additive
+// export used to hand people a shell script whose first line was `python repoint_model.py
+// …`, which means the "add a new outfit" path -- the one that cannot damage your game and
+// so should be the EASIEST -- demanded a Python install before it would do anything. The
+// whole operation is a few hundred bytes of edits, so there is no reason it cannot happen
+// in the browser where the donor bytes already are.
+//
+// WHAT IT TOUCHES: only 4-byte texture hashes inside the MTRL chunk, then the container's
+// trailing CSUM. Every other byte -- HIER, SEGM, GEOM, the vertex streams -- is copied
+// verbatim, which is what makes it safe: a reskin has no business editing geometry.
+//
+// The asset's own identity is NOT in the container; it comes from the ASET row that the
+// packer declares, so the clone needs no name patch.
+
+
+const tag = (b, o) => String.fromCharCode(b[o], b[o + 1], b[o + 2], b[o + 3]);
+const u32 = (b, o) => (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0;
+const putU32 = (b, o, v) => {
+  b[o] = v & 0xff; b[o + 1] = (v >>> 8) & 0xff;
+  b[o + 2] = (v >>> 16) & 0xff; b[o + 3] = (v >>> 24) & 0xff;
+};
+
+/** (start, end) of the MTRL chunk, in FILE coordinates. */
+function mtrlSpan(b) {
+  if (tag(b, 0) !== 'UCFX') throw new Error('Not a UCFX container.');
+  const base = u32(b, 4);
+  const n = u32(b, 16);
+  for (let r = 0; r < n; r++) {
+    const o = 20 + r * 20;
+    if (tag(b, o) === 'MTRL') {
+      const off = u32(b, o + 4);
+      const sz = u32(b, o + 8);
+      return [base + off, base + off + sz];
+    }
+  }
+  throw new Error('No MTRL chunk — this container declares no materials.');
+}
+
+/**
+ * @param {Uint8Array} src   the donor container, verbatim from the bundle's raw/ folder
+ * @param {Array<{from:number,to:number}>} pairs
+ * @returns {{bytes: Uint8Array, counts: Array<{from:number,to:number,n:number}>}}
+ */
+function repointModel(src, pairs) {
+  const d = Uint8Array.from(src);
+  if (d.length < 16) throw new Error('Container is too small to be a model.');
+  if (tag(d, d.length - 8) !== 'CSUM') throw new Error('Container does not end with CSUM.');
+
+  // Verify BEFORE editing. If the donor's own checksum does not reproduce, our idea of the
+  // format is wrong somewhere, and silently writing a container we cannot account for is
+  // how you ship something that crashes on load.
+  const want = u32(d, d.length - 4);
+  const got = crc32Mercs2(d.subarray(0, d.length - 8));
+  if (got !== want) {
+    throw new Error('Donor CSUM does not verify — refusing to edit a container we cannot '
+      + `reproduce (stored ${hex(want)}, computed ${hex(got)}).`);
+  }
+
+  const [lo, hi] = mtrlSpan(d);
+  const counts = [];
+  for (const { from, to } of pairs) {
+    const pat = [from & 0xff, (from >>> 8) & 0xff, (from >>> 16) & 0xff, (from >>> 24) & 0xff];
+    let n = 0;
+    for (let i = lo; i + 4 <= hi; i++) {
+      if (d[i] === pat[0] && d[i + 1] === pat[1] && d[i + 2] === pat[2] && d[i + 3] === pat[3]) {
+        putU32(d, i, to);
+        i += 3;
+        n++;
+      }
+    }
+    // A zero-match repoint means the donor and the edit disagree about what this model
+    // uses. Carrying on would produce a container that looks fine and renders the original
+    // textures, which is far harder to diagnose than a refusal here.
+    if (!n) {
+      throw new Error(`${hex(from)} does not appear in this model's materials — wrong donor, `
+        + 'or that texture is not one this model uses.');
+    }
+    counts.push({ from, to, n });
+  }
+
+  putU32(d, d.length - 4, crc32Mercs2(d.subarray(0, d.length - 8)));
+
+  // Re-verify rather than trusting the write.
+  if (d.length !== src.length) throw new Error('Size changed — geometry was disturbed.');
+  if (crc32Mercs2(d.subarray(0, d.length - 8)) !== u32(d, d.length - 4)) {
+    throw new Error('CSUM did not take.');
+  }
+  return { bytes: d, counts };
+}
+
+const hex = (n) => '0x' + (n >>> 0).toString(16).toUpperCase().padStart(8, '0');
 
 
 // ===== src/ui/dom.js =====
@@ -3907,8 +4075,10 @@ async function exportModkit() {
   download(`${S.plan.modelName}-modkit.zip`, makeZip(zipFiles));
 }
 
-/** Path B — new asset: encode every edited sheet to a fully-resident UCFX container. */
-function exportUcfx() {
+/** Path B — new asset: a finished, self-installing kit. Encodes every edited sheet to a
+ *  fully-resident UCFX container, clones the model with its references repointed at them,
+ *  and ships a .bat that runs the single remaining command. */
+async function exportUcfx() {
   const bad = S.plan.items.filter((i) => {
     const r = S.textures.get(i.originalHash);
     return !isPow2(r.width) || !isPow2(r.height);
@@ -3916,29 +4086,58 @@ function exportUcfx() {
   if (bad.length) return fail(new Error('Every texture must be power-of-two; these are not: ' +
     bad.map((i) => `${i.originalName || i.originalHash}`).join(', ')));
 
-  status(`encoding ${S.plan.items.length} texture(s) to DXT1…`);
-  setTimeout(() => {
-    try {
-      const files = [];
-      for (const item of S.plan.items) {
-        const rec = S.textures.get(item.originalHash);
-        const img = rec.edited || rec.original;
-        const rgb = new Float32Array(img.width * img.height * 3);
-        for (let i = 0, n = img.width * img.height; i < n; i++) {
-          rgb[i * 3] = img.data[i * 4];
-          rgb[i * 3 + 1] = img.data[i * 4 + 1];
-          rgb[i * 3 + 2] = img.data[i * 4 + 2];
-        }
-        files.push({
-          name: item.file,
-          data: buildUcfxTexture({ width: img.width, height: img.height, rgb, name: item.texName }),
-        });
+  try {
+    // Repoint FIRST. It is the step with a real precondition (the bundle's raw/ folder),
+    // so failing here costs nothing, whereas failing after a 256-sheet DXT1 encode does.
+    status('cloning the model…');
+    const model = await buildRepointedModel();
+
+    status(`encoding ${S.plan.items.length} texture(s) to DXT1…`);
+    await new Promise((r) => setTimeout(r, 16));
+
+    const files = [];
+    for (const item of S.plan.items) {
+      const rec = S.textures.get(item.originalHash);
+      const img = rec.edited || rec.original;
+      const rgb = new Float32Array(img.width * img.height * 3);
+      for (let i = 0, n = img.width * img.height; i < n; i++) {
+        rgb[i * 3] = img.data[i * 4];
+        rgb[i * 3 + 1] = img.data[i * 4 + 1];
+        rgb[i * 3 + 2] = img.data[i * 4 + 2];
       }
-      files.push({ name: 'build.sh', data: new TextEncoder().encode(buildCommands({ bundle: S.bundle, plan: S.plan })) });
-      download(`${S.plan.modelName}-assets.zip`, makeZip(files));
-      status('');
-    } catch (e) { fail(e); }
-  }, 16);
+      files.push({
+        name: item.file,
+        data: buildUcfxTexture({ width: img.width, height: img.height, rgb, name: item.texName }),
+      });
+    }
+    files.push({ name: `${S.plan.modelName}.ucfx`, data: model.bytes });
+    files.push({ name: 'install.bat', data: new TextEncoder().encode(buildCommands({ bundle: S.bundle, plan: S.plan })) });
+    files.push({ name: 'README.txt', data: new TextEncoder().encode(buildNotes({ bundle: S.bundle, plan: S.plan })) });
+    download(`${S.plan.modelName}-assets.zip`, makeZip(files));
+    status('');
+    note(`Kit ready: ${model.counts.reduce((n, c) => n + c.n, 0)} texture reference(s) repointed `
+      + 'in the model. Unzip it and double-click install.bat.');
+  } catch (e) { fail(e); }
+}
+
+/** Clone the donor's model container with its texture references repointed at the new
+ *  assets. Done here rather than in a shipped Python script so the additive path needs no
+ *  interpreter — see src/repoint.js. */
+async function buildRepointedModel() {
+  const lod = (S.bundle.manifest.lod_chain || [])[0];
+  if (!lod) throw new Error('This bundle has no LOD chain, so there is no model container to clone.');
+  const want = `block${lod.block}_p000.ucfx`;
+  const f = S.files && S.files.raw ? S.files.raw.get(want) : null;
+  if (!f) {
+    throw new Error(`The export is missing raw/${want}. Re-export the character and drag in `
+      + 'the whole folder — the raw folder is what the new model is cloned from.');
+  }
+  const src = new Uint8Array(await f.arrayBuffer());
+  const pairs = S.plan.items.map((i) => ({
+    from: parseInt(i.originalHash, 16),
+    to: i.texHash,
+  }));
+  return repointModel(src, pairs);
 }
 
 function exportPng() {

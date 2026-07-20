@@ -105,55 +105,127 @@ export function planExport({ bundle, edits, skinName }) {
  *  block and stop being additive.
  */
 export function buildCommands({ bundle, plan }) {
-  const lod = (bundle.manifest.lod_chain || [])[0];
-  const rawName = lod ? `block${lod.block}_P000.ucfx` : 'block<N>_P000.ucfx';
-  const CONT = ' \\';
-  const lines = [
-    `# ADDITIVE reskin of "${bundle.name}" — originals untouched, this is a NEW outfit.`,
-    `#`,
-    `# new model asset : ${plan.modelName}  ${hex8(plan.modelHash)}`,
+  // ★ The model container is already repointed and shipped in the zip, so there is no
+  // Python step any more. That mattered: the additive path is the one that CANNOT damage
+  // your game, so it should be the easiest, and it was the only one demanding an
+  // interpreter install before it would do anything at all.
+  const L = [
+    '@echo off',
+    'setlocal',
+    'rem ===========================================================================',
+    `rem  Install "${plan.modelName}" — a NEW outfit, added alongside the originals.`,
+    'rem',
+    'rem  Nothing in your game is modified. This builds a patch WAD containing only',
+    'rem  new assets under new names; the base game files are read and never written.',
+    'rem',
+    `rem   new model   : ${plan.modelName}  ${hex8(plan.modelHash)}`,
     ...plan.items.map((i) =>
-      `# new texture     : ${i.texName}  ${hex8(i.texHash)}   (was ${i.originalName || i.originalHash})`),
-    ``,
-    `# 1. Clone the donor's model container, repointing its material texture references.`,
-    `#    NOT inject_parts --repoint: that requires at least one --part, so it cannot`,
-    `#    express "same mesh, different textures". repoint_model.py rewrites only the`,
-    `#    4-byte hashes inside MTRL plus the trailing CSUM; every geometry byte is copied`,
-    `#    verbatim, and it re-verifies the result before writing.`,
-    `python repoint_model.py raw/${rawName} ${plan.modelName}.ucfx` + CONT,
+      `rem   new texture : ${i.texName}  ${hex8(i.texHash)}`),
+    'rem',
+    'rem  Double-click this file. If it cannot find the packer it will tell you where',
+    'rem  to get it.',
+    'rem ===========================================================================',
+    '',
+    'rem --- find the packer -------------------------------------------------',
+    'set "SM="',
+    'if exist "%~dp0mercs2_smuggler.exe" set "SM=%~dp0mercs2_smuggler.exe"',
+    'if not defined SM if defined MERCS2_SMUGGLER if exist "%MERCS2_SMUGGLER%" set "SM=%MERCS2_SMUGGLER%"',
+    'if not defined SM for %%X in (mercs2_smuggler.exe) do if not "%%~$PATH:X"=="" set "SM=%%~$PATH:X"',
+    'if not defined SM (',
+    '  echo.',
+    '  echo   Could not find mercs2_smuggler.exe',
+    '  echo   Put it next to this file, or set MERCS2_SMUGGLER to its full path.',
+    '  echo   Get it from the community toolchain releases:',
+    '  echo     https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/releases',
+    '  echo.',
+    '  pause',
+    '  exit /b 1',
+    ')',
+    '',
+    'rem --- find the game ---------------------------------------------------',
+    'set "WAD=%~1"',
+    'if "%WAD%"=="" set "WAD=C:\\Games\\Mercenaries 2 World in Flames\\data\\vz.wad"',
+    'if not exist "%WAD%" (',
+    '  echo.',
+    '  echo   Could not find vz.wad at:',
+    '  echo     %WAD%',
+    '  echo   Drag your vz.wad onto this .bat, or edit the path above.',
+    '  echo.',
+    '  pause',
+    '  exit /b 1',
+    ')',
+    '',
+    'rem --- pack ------------------------------------------------------------',
+    'rem --extra-only means "add blocks, never touch an existing one". That single flag',
+    'rem is what makes this additive rather than a replacement.',
+    'echo   packing...',
+    `"%SM%" --source-wad "%WAD%" --extra-only ^`,
   ];
-  plan.items.forEach((i, n) => {
-    lines.push(`    ${i.originalHash}:${hex8(i.texHash)}` + (n < plan.items.length - 1 ? CONT : ''));
-  });
-  lines.push(
-    ``,
-    `# 2. Pack every new asset into a patch WAD. --extra-only means "add blocks, never`,
-    `#    touch a donor block" — that flag is what keeps this additive.`,
-    `mercs2_smuggler --source-wad "<game>/data/vz.wad" --extra-only` + CONT,
-  );
   for (const i of plan.items) {
-    lines.push(`    --inject-extra ${hex8(i.texHash)}:27:${i.file}` + CONT);
+    L.push(`    --inject-extra ${hex8(i.texHash)}:27:"%~dp0${i.file}" ^`);
   }
-  lines.push(
-    `    --inject-extra ${hex8(plan.modelHash)}:19:${plan.modelName}.ucfx` + CONT,
-    `    -o ${plan.modelName}-patch.wad`,
-    ``,
-    `# 3. Install. Import the patch WAD in the modkit (it merges with your other mods), or`,
-    `#    if you have no other patch, drop it in as data/vz-patch.wad.`,
-    ``,
-    `# ⚠ DETAIL LOSS applies only to TWO-BLOCK characters -- confirmed in game.`,
-    `#   A model's ASET row packs its block reference as (block << 16) | sub, and for a`,
-    `#   character 'sub' is the index of a SECOND block holding the finer LOD rungs, or`,
-    `#   65535 for none. --inject-extra forces sub=65535, so a clone of a two-block`,
-    `#   character loses its finer rungs and renders its coarsest tier at ALL distances --`,
-    `#   the face visibly flattens.`,
-    `#   Characters with no second block clone at full detail. The tool marks which is`,
-    `#   which; see docs/LOD-CHAIN.md.`,
-    ``,
-    `# 4. Wear it in-game`,
-    `#    Player.SetOutfit(Player.GetLocalCharacter(), "${plan.modelName}")`,
+  L.push(
+    `    --inject-extra ${hex8(plan.modelHash)}:19:"%~dp0${plan.modelName}.ucfx" ^`,
+    `    -o "%~dp0${plan.modelName}-patch.wad"`,
+    '',
+    'if errorlevel 1 (',
+    '  echo.',
+    '  echo   Packing failed — see the message above.',
+    '  pause',
+    '  exit /b 1',
+    ')',
+    '',
+    'echo.',
+    `echo   Built ${plan.modelName}-patch.wad`,
+    'echo.',
+    'echo   Install it either way:',
+    'echo     - import it in the modkit ^(it merges with your other mods^), or',
+    'echo     - if you have no other mods, drop it in as data\\vz-patch.wad',
+    'echo.',
+    'echo   Then wear it in game:',
+    `echo     Player.SetOutfit^(Player.GetLocalCharacter^(^), "${plan.modelName}"^)`,
+    'echo.',
+    'echo   Only run that once the patch is installed and loaded. Asking the game for',
+    'echo   an outfit name it cannot find crashes it to desktop.',
+    'echo.',
+    'pause',
   );
-  return lines.join('\n');
+  return L.join('\r\n');
+}
+
+/** The same recipe as prose, for anyone not on Windows or reading before running. */
+export function buildNotes({ bundle, plan }) {
+  return [
+    `"${plan.modelName}" — a NEW outfit for ${bundle.name}, added alongside the originals.`,
+    '',
+    'WHAT IS IN THIS ZIP',
+    `  ${plan.modelName}.ucfx        the model, already cloned and repointed at the new textures`,
+    ...plan.items.map((i) => `  ${i.file}${' '.repeat(Math.max(1, 28 - i.file.length))}new texture (${i.texName})`),
+    '  install.bat                    double-click this',
+    '',
+    'WHAT IT DOES',
+    '  Packs the files above into a patch WAD holding only NEW assets under NEW names.',
+    '  Your game files are read and never written. Nothing that already exists changes.',
+    '',
+    'IF YOU ARE NOT ON WINDOWS, the one command is:',
+    `  mercs2_smuggler --source-wad "<game>/data/vz.wad" --extra-only \\`,
+    ...plan.items.map((i) => `      --inject-extra ${hex8(i.texHash)}:27:${i.file} \\`),
+    `      --inject-extra ${hex8(plan.modelHash)}:19:${plan.modelName}.ucfx \\`,
+    `      -o ${plan.modelName}-patch.wad`,
+    '',
+    'WEARING IT',
+    `  Player.SetOutfit(Player.GetLocalCharacter(), "${plan.modelName}")`,
+    '  Only after the patch is installed and loaded — an outfit name the game cannot',
+    '  find crashes it to desktop, with no soft failure.',
+    '',
+    'A NOTE ON DETAIL',
+    "  A model's ASET row packs its block reference as (block << 16) | sub, and for a",
+    "  character 'sub' points at a SECOND block holding the finer LOD rungs, or 65535",
+    '  for none. --inject-extra forces sub=65535, so a copy of a two-block character',
+    '  loses its finer rungs and renders its coarsest tier at every distance — the face',
+    '  visibly flattens. Characters with no second block copy at full detail; the tool',
+    '  marks which is which. See docs/LOD-CHAIN.md.',
+  ].join('\r\n');
 }
 
 /**

@@ -5,7 +5,8 @@
 
 import { readBundle, sortBundleFiles, MISSING_HINT } from '../bundle.js';
 import { buildUcfxTexture, isPow2 } from '../texture.js';
-import { planExport, buildCommands, buildModkitMod, preflight, hex8, sanitizeAssetName } from '../export.js';
+import { planExport, buildCommands, buildNotes, buildModkitMod, preflight, hex8, sanitizeAssetName } from '../export.js';
+import { repointModel } from '../repoint.js';
 import { setNameSource, nameForHash } from '../names.js';
 import { setCatalogue, buildWizard, onDonorPicked, setBundleLoader, setSampleApplier } from './wizard.js';
 import { SAMPLE } from '../sample.js';
@@ -424,8 +425,10 @@ async function exportModkit() {
   download(`${S.plan.modelName}-modkit.zip`, makeZip(zipFiles));
 }
 
-/** Path B — new asset: encode every edited sheet to a fully-resident UCFX container. */
-function exportUcfx() {
+/** Path B — new asset: a finished, self-installing kit. Encodes every edited sheet to a
+ *  fully-resident UCFX container, clones the model with its references repointed at them,
+ *  and ships a .bat that runs the single remaining command. */
+async function exportUcfx() {
   const bad = S.plan.items.filter((i) => {
     const r = S.textures.get(i.originalHash);
     return !isPow2(r.width) || !isPow2(r.height);
@@ -433,29 +436,58 @@ function exportUcfx() {
   if (bad.length) return fail(new Error('Every texture must be power-of-two; these are not: ' +
     bad.map((i) => `${i.originalName || i.originalHash}`).join(', ')));
 
-  status(`encoding ${S.plan.items.length} texture(s) to DXT1…`);
-  setTimeout(() => {
-    try {
-      const files = [];
-      for (const item of S.plan.items) {
-        const rec = S.textures.get(item.originalHash);
-        const img = rec.edited || rec.original;
-        const rgb = new Float32Array(img.width * img.height * 3);
-        for (let i = 0, n = img.width * img.height; i < n; i++) {
-          rgb[i * 3] = img.data[i * 4];
-          rgb[i * 3 + 1] = img.data[i * 4 + 1];
-          rgb[i * 3 + 2] = img.data[i * 4 + 2];
-        }
-        files.push({
-          name: item.file,
-          data: buildUcfxTexture({ width: img.width, height: img.height, rgb, name: item.texName }),
-        });
+  try {
+    // Repoint FIRST. It is the step with a real precondition (the bundle's raw/ folder),
+    // so failing here costs nothing, whereas failing after a 256-sheet DXT1 encode does.
+    status('cloning the model…');
+    const model = await buildRepointedModel();
+
+    status(`encoding ${S.plan.items.length} texture(s) to DXT1…`);
+    await new Promise((r) => setTimeout(r, 16));
+
+    const files = [];
+    for (const item of S.plan.items) {
+      const rec = S.textures.get(item.originalHash);
+      const img = rec.edited || rec.original;
+      const rgb = new Float32Array(img.width * img.height * 3);
+      for (let i = 0, n = img.width * img.height; i < n; i++) {
+        rgb[i * 3] = img.data[i * 4];
+        rgb[i * 3 + 1] = img.data[i * 4 + 1];
+        rgb[i * 3 + 2] = img.data[i * 4 + 2];
       }
-      files.push({ name: 'build.sh', data: new TextEncoder().encode(buildCommands({ bundle: S.bundle, plan: S.plan })) });
-      download(`${S.plan.modelName}-assets.zip`, makeZip(files));
-      status('');
-    } catch (e) { fail(e); }
-  }, 16);
+      files.push({
+        name: item.file,
+        data: buildUcfxTexture({ width: img.width, height: img.height, rgb, name: item.texName }),
+      });
+    }
+    files.push({ name: `${S.plan.modelName}.ucfx`, data: model.bytes });
+    files.push({ name: 'install.bat', data: new TextEncoder().encode(buildCommands({ bundle: S.bundle, plan: S.plan })) });
+    files.push({ name: 'README.txt', data: new TextEncoder().encode(buildNotes({ bundle: S.bundle, plan: S.plan })) });
+    download(`${S.plan.modelName}-assets.zip`, makeZip(files));
+    status('');
+    note(`Kit ready: ${model.counts.reduce((n, c) => n + c.n, 0)} texture reference(s) repointed `
+      + 'in the model. Unzip it and double-click install.bat.');
+  } catch (e) { fail(e); }
+}
+
+/** Clone the donor's model container with its texture references repointed at the new
+ *  assets. Done here rather than in a shipped Python script so the additive path needs no
+ *  interpreter — see src/repoint.js. */
+async function buildRepointedModel() {
+  const lod = (S.bundle.manifest.lod_chain || [])[0];
+  if (!lod) throw new Error('This bundle has no LOD chain, so there is no model container to clone.');
+  const want = `block${lod.block}_p000.ucfx`;
+  const f = S.files && S.files.raw ? S.files.raw.get(want) : null;
+  if (!f) {
+    throw new Error(`The export is missing raw/${want}. Re-export the character and drag in `
+      + 'the whole folder — the raw folder is what the new model is cloned from.');
+  }
+  const src = new Uint8Array(await f.arrayBuffer());
+  const pairs = S.plan.items.map((i) => ({
+    from: parseInt(i.originalHash, 16),
+    to: i.texHash,
+  }));
+  return repointModel(src, pairs);
 }
 
 function exportPng() {

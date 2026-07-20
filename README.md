@@ -168,11 +168,18 @@ Both paths take a swapped outfit exactly like a painted one.
 |---|---|---|
 | for | "recolour this character" | "add outfits that coexist" |
 | does | replaces the character's own textures | mints a **new** model + textures |
-| you get | PNGs + `mod.json` | `.ucfx` containers + a build script |
-| packing | the modkit does everything | two commands (script included) |
+| you get | PNGs + `mod.json` | a finished kit + `install.bat` |
+| packing | the modkit does everything | double-click `install.bat` |
 | original | restored by uninstalling | never touched |
 | geometry | always correct | correct on single-block characters |
 | how many | one variant per character | **effectively unlimited** |
+
+The new-asset kit is **ready to install**, not a recipe. The model container is cloned and
+repointed at the new textures *in the browser* ([`src/repoint.js`](src/repoint.js)), so the
+zip contains the finished `.ucfx` files and a `.bat` that runs the single remaining command.
+Previously this path opened with `python repoint_model.py …`, which meant the one route that
+**cannot damage your game** was also the only one demanding an interpreter install. That was
+backwards, and it is gone.
 
 **A** exists because the modkit already solves the hard part — its texture-swap contract is
 just `{name, image_path}`, and it handles the encode, the container, the WAD assembly and

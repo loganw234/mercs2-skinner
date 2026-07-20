@@ -3,7 +3,7 @@
 // all 80 recovered bone names of the human skeleton, which are known name/hash pairs.
 
 import { readFileSync, existsSync } from 'node:fs';
-import { pandemicHashM2, hex8, sanitizeAssetName, preflight, planExport, buildCommands, buildModkitMod } from '../src/export.js';
+import { pandemicHashM2, hex8, sanitizeAssetName, preflight, planExport, buildCommands, buildNotes, buildModkitMod } from '../src/export.js';
 
 const SKEL = 'C:/Users/logan/source/repos/mercs2-mesher/data/skeleton_npc84.json';
 
@@ -79,24 +79,42 @@ export function run(t) {
     /0xB8555125|hair/.test(plan.incompleteWarning), plan.incompleteWarning);
 
   const cmd = buildCommands({ bundle, plan });
-  t.ok('command block repoints BOTH edited textures',
-    cmd.includes(`0x8DE46BB7:${hex8(plan.items[0].texHash)}`) &&
-    cmd.includes(`0xD7DE49F7:${hex8(plan.items[1].texHash)}`), cmd);
-  // Assert on the RUNNABLE lines only: the block deliberately explains in comments why
-  // inject_parts is not used, and that prose must not trip these checks.
-  const runnable = cmd.split('\n').filter((l) => l.trim() && !l.trim().startsWith('#')).join('\n');
-  t.eq('exactly one repoint invocation', (runnable.match(/repoint_model\.py/g) || []).length, 1);
-  t.ok('command block clones the raw block rather than editing in place',
-    runnable.includes('repoint_model.py raw/block2110_P000.ucfx'));
+  // Assert on the RUNNABLE lines only: the script deliberately explains itself in `rem`
+  // comments and echoes prose, and none of that must trip these checks.
+  const runnable = cmd.split('\r\n')
+    .filter((l) => l.trim() && !/^\s*(rem\b|echo\b|:)/i.test(l.trim())).join('\n');
+
+  // ★ The model is repointed in the browser now (src/repoint.js) and shipped ready-made in
+  // the zip, so the script must NOT ask for an interpreter. The additive path is the one
+  // that cannot damage anyone's game; requiring a Python install to use it was backwards.
+  t.ok('no Python step survives', !/python|\.py\b/i.test(cmd), cmd.slice(0, 300));
+  t.ok('the ready-made model is what gets injected',
+    runnable.includes(`${plan.modelName}.ucfx`));
   // inject_parts REQUIRES at least one --part, so it cannot express "same mesh, different
   // textures" -- verified against the real binary, which printed usage and refused. This
   // assertion exists so that dead end is never re-emitted.
   t.ok('does NOT run inject_parts, which requires a --part', !runnable.includes('inject_parts'));
   // --extra-only is what makes the pack additive: "add blocks, never touch a donor block".
   t.ok('packs with --extra-only so no donor block is touched', runnable.includes('--extra-only'));
-  t.ok('every new texture is injected', (runnable.match(/--inject-extra/g) || []).length === 3,
+  t.ok('every new asset is injected', (runnable.match(/--inject-extra/g) || []).length === 3,
     'expected 2 textures + 1 model');
-  t.ok('command block ends with how to wear it', cmd.includes('Player.SetOutfit'));
+  t.ok('textures are injected under type 27',
+    runnable.includes(`${hex8(plan.items[0].texHash)}:27:`));
+  t.ok('the model is injected under type 19',
+    runnable.includes(`${hex8(plan.modelHash)}:19:`));
+  t.ok('the script says how to wear it', cmd.includes('Player.SetOutfit'));
+  // A .bat that dies without saying why is worse than no .bat: the window vanishes.
+  t.ok('it pauses so a failure is readable', /pause/.test(cmd));
+  t.ok('it checks the packer exists before running it', /Could not find mercs2_smuggler/.test(cmd));
+  t.ok('it checks the game WAD exists', /Could not find vz\.wad/.test(cmd));
+  t.ok('batch line endings are CRLF', cmd.includes('\r\n') && !/[^\r]\n/.test(cmd));
+
+  const notes = buildNotes({ bundle, plan });
+  t.ok('the notes name every file in the kit',
+    notes.includes(`${plan.modelName}.ucfx`) && notes.includes('install.bat')
+    && plan.items.every((i) => notes.includes(i.file)));
+  t.ok('the notes give the non-Windows command', notes.includes('mercs2_smuggler --source-wad'));
+  t.ok('the notes state the crash risk plainly', /crashes it to desktop/.test(notes));
 
   // --- MODKIT PATH ---
   const mk = buildModkitMod({ bundle, plan, skinName: 'Red Variant' });
@@ -119,6 +137,11 @@ export function run(t) {
   t.eq('unnamed textures are excluded from the modkit swap list', mkAnon.mod.textures.length, 1);
   t.ok('and are reported rather than dropped silently', !!mkAnon.blocked, 'no blocked message');
   t.ok('the blocked message names the offending hash', mkAnon.blocked.includes('0xB8555125'));
-  t.ok('the new-asset path still covers the unnamed texture',
-    buildCommands({ bundle, plan: anon }).includes('0xB8555125:'));
+  // The modkit path cannot carry a texture whose engine name was never recovered, because
+  // it swaps BY NAME. The new-asset path does not care -- it mints a fresh name -- so the
+  // sheet must still ship there rather than being quietly lost between the two routes.
+  const anonItem = anon.items.find((i) => i.originalHash === '0xB8555125');
+  t.ok('the unnamed texture still gets a plan item', !!anonItem);
+  t.ok('the new-asset path still ships the unnamed texture',
+    buildCommands({ bundle, plan: anon }).includes(`${hex8(anonItem.texHash)}:27:`));
 }
