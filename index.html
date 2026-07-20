@@ -86,6 +86,23 @@
      it dark on the browsers that do honour it, instead of flashing white. */
   select option, select optgroup { background:var(--panel); color:var(--fg); }
   select optgroup { color:var(--faint); font-style:normal; font-weight:600; }
+  /* Quality tiers. Every option also spells its tier out in words, because a browser is
+     free to ignore option colours entirely and plenty of people cannot separate red from
+     green -- the colour is a shortcut, never the only carrier. */
+  select option.opt-good { color:var(--ok); }
+  select option.opt-ok   { color:var(--warn); }
+  select option.opt-bad  { color:var(--bad); }
+  /* The closed control does not inherit the chosen option's colour, so restate it here. */
+  select.sel-good { border-color:#1e5236; color:var(--ok); }
+  select.sel-ok   { border-color:#5a4517; color:var(--warn); }
+  select.sel-bad  { border-color:#5a2020; color:var(--bad); }
+  .legend { display:flex; flex-wrap:wrap; gap:6px 16px; margin:0 0 8px; font-size:11px;
+            color:var(--faint); }
+  .legend-item { display:inline-flex; align-items:center; gap:5px; }
+  .dot { font-size:13px; line-height:1; }
+  .dot.opt-good { color:var(--ok); }
+  .dot.opt-ok { color:var(--warn); }
+  .dot.opt-bad { color:var(--bad); }
   .chip { display:inline-block; padding:3px 9px; border-radius:5px; font-size:11px; margin:0 6px 6px 0;
           border:1px solid var(--line); background:var(--panel); color:var(--dim); }
   .chip.bad { color:var(--bad); border-color:#5a2020; }

@@ -153,6 +153,47 @@ function buildRest() {
   }
 }
 
+/**
+ * Rank a character for the job at hand: green best, amber workable, red costs something.
+ *
+ * ★ `cloning` matters, and it is why this is not one fixed scale. Copying a two-block
+ * character loses its finer LOD rungs and flattens its face -- but NOTHING is copied when
+ * you repaint a character in place, and nothing is copied from an outfit DONOR either
+ * (only its artwork and body shape are read). Painting those red would steer people away
+ * from choices that are perfectly correct for what they are doing.
+ *
+ * So: the LOD tier only counts when a copy will actually be made. Otherwise the only thing
+ * that separates characters is whether the textures belong to them alone.
+ */
+export function tier(c, cloning) {
+  const own = (c.sheets || []).some((s) => s.part === 'ub' || s.part === 'lb');
+  if (cloning && c.blocks !== 1) {
+    return { rank: 2, cls: 'opt-bad', tag: 'loses detail if copied' };
+  }
+  if (own) {
+    return { rank: 0, cls: 'opt-good', tag: cloning ? 'full detail · own textures' : 'own textures' };
+  }
+  return { rank: 1, cls: 'opt-ok', tag: cloning ? 'full detail · shared textures' : 'shared textures' };
+}
+
+const LEGEND = {
+  'opt-good': 'best pick',
+  'opt-ok': 'shared textures — it wears another character\'s kit',
+  'opt-bad': 'a copy of this one renders its coarsest detail at every distance',
+};
+
+function legendRow(cloning) {
+  const row = el('div', 'legend');
+  const keys = cloning ? ['opt-good', 'opt-ok', 'opt-bad'] : ['opt-good', 'opt-ok'];
+  for (const k of keys) {
+    const chip = el('span', 'legend-item');
+    chip.appendChild(el('span', `dot ${k}`, '●'));
+    chip.appendChild(el('span', null, LEGEND[k]));
+    row.appendChild(chip);
+  }
+  return row;
+}
+
 // ---------------------------------------------------------------- 2/3. pick people
 function characterPicker(body, { lit, note, exclude, onChoose, current }) {
   const wrap = el('div', 'picker');
@@ -167,25 +208,29 @@ function characterPicker(body, { lit, note, exclude, onChoose, current }) {
   ph.value = '';
   sel.appendChild(ph);
 
+  // A copy is only made when a NEW asset is minted: adding outfits, or wearing someone
+  // else's on your own body. Repainting in place clones nothing, and neither does reading
+  // a donor's artwork.
+  const cloning = lit === 'body' && W.goal !== 'replace';
+  left.appendChild(legendRow(cloning));
+
   const byF = {};
   for (const c of list) (byF[c.faction] = byF[c.faction] || []).push(c);
   for (const f of Object.keys(byF).sort()) {
     const og = document.createElement('optgroup');
     og.label = f;
-    // Clone-safe first, then template-ready: the options that will work well should not be
+    // Best tier first, then template-ready: the options that will work well should not be
     // buried under ones that will not.
     const sorted = [...byF[f]].sort((a, b) =>
-      (a.blocks === 1 ? 0 : 1) - (b.blocks === 1 ? 0 : 1)
+      tier(a, cloning).rank - tier(b, cloning).rank
       || (b.template ? 1 : 0) - (a.template ? 1 : 0)
       || a.name.localeCompare(b.name));
     for (const c of sorted) {
-      const own = c.sheets.filter((s) => s.part === 'ub' || s.part === 'lb')
-        .map((s) => s.part).join(', ');
-      const bits = [];
-      if (lit === 'body' && c.blocks === 1) bits.push('✓ full detail');
-      else if (lit === 'body') bits.push('⚠ loses detail if cloned');
-      bits.push(own ? `own ${own}` : "wears another's textures");
-      const o = el('option', null, `${c.name}   ${bits.join(' · ')}`);
+      const t = tier(c, cloning);
+      // The dot carries the colour, the words carry the meaning. Colour alone would be
+      // useless to anyone who cannot separate red from green, and <option> cannot hold
+      // markup -- so the tag is spelled out in the text either way.
+      const o = el('option', t.cls, `● ${c.name}   ${t.tag}`);
       o.value = c.name;
       if (current && current.name === c.name) o.selected = true;
       og.appendChild(o);
@@ -193,6 +238,17 @@ function characterPicker(body, { lit, note, exclude, onChoose, current }) {
     sel.appendChild(og);
   }
   left.appendChild(sel);
+
+  // The closed select shows one option, and browsers do not carry the option's colour up
+  // to it. Restate the tier on the control itself so the current choice stays legible
+  // without opening the list -- and so the meaning survives a browser that ignores option
+  // colours entirely.
+  const paint = () => {
+    const c = list.find((x) => x.name === sel.value);
+    sel.classList.remove('sel-good', 'sel-ok', 'sel-bad');
+    if (c) sel.classList.add(tier(c, cloning).cls.replace('opt-', 'sel-'));
+  };
+  sel.addEventListener('change', paint);
 
   const detail = el('div');
   left.appendChild(detail);
@@ -208,7 +264,7 @@ function characterPicker(body, { lit, note, exclude, onChoose, current }) {
     const c = list.find((x) => x.name === sel.value);
     detail.innerHTML = '';
     if (!c) return;
-    detail.appendChild(describe(c, lit));
+    detail.appendChild(describe(c, cloning));
     const go = el('button', 'btn', 'Use ' + c.name);
     go.addEventListener('click', () => onChoose(c));
     const act = el('div', 'step-actions');
@@ -218,11 +274,14 @@ function characterPicker(body, { lit, note, exclude, onChoose, current }) {
   if (current) sel.dispatchEvent(new Event('change'));
 }
 
-function describe(c, lit) {
+function describe(c, cloning) {
   const box = el('div');
   const sheets = c.sheets.map((s) => `${s.part}${s.size ? ' ' + s.size : ''}`).join(' · ');
   box.appendChild(el('div', 'wz-sheets', `Sheets: ${sheets || 'none of its own'}`));
-  if (lit === 'body') {
+  // Only raised where a copy is actually made. Under "change how someone looks" nothing is
+  // cloned, so a two-block character is not a compromise at all and saying so would push
+  // people off a perfectly good choice.
+  if (cloning) {
     if (c.blocks === 1) {
       box.appendChild(el('div', 'wz-ok',
         '✓ Keeps full detail. All of this character\'s geometry is in one place, so a copy '
@@ -231,7 +290,7 @@ function describe(c, lit) {
       box.appendChild(el('div', 'wz-warn',
         '⚠ A copy of this one loses detail. Its finer geometry lives in a second block a '
         + 'copy cannot carry, so it renders its coarsest version at every distance and the '
-        + 'face visibly flattens. Fine if you are repainting it in place.'));
+        + 'face visibly flattens. Fine if you are repainting it in place instead.'));
     }
   }
   if (!c.sheets.some((s) => s.part === 'ub' || s.part === 'lb')) {

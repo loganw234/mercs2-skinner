@@ -56,7 +56,7 @@ const t = {
 };
 
 const SUITES = ['texture.test.js', 'export.test.js', 'bundle.test.js', 'recolor.test.js',
-  'transfer.test.js'];
+  'transfer.test.js', 'wizard.test.js'];
 
 for (const s of SUITES) {
   if (filter && !s.includes(filter)) continue;
