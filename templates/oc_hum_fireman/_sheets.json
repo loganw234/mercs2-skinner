@@ -1,0 +1,37 @@
+[
+ {
+  "name": "tex_0x9840666A",
+  "hash": "0x9840666A",
+  "w": 128,
+  "h": 128,
+  "tris": 506
+ },
+ {
+  "name": "tex_0xF01E652C",
+  "hash": "0xF01E652C",
+  "w": 256,
+  "h": 256,
+  "tris": 1418
+ },
+ {
+  "name": "oc_hum_fireman_lb",
+  "hash": "0xB254F596",
+  "w": 256,
+  "h": 256,
+  "tris": 1770
+ },
+ {
+  "name": "oc_hum_fireman_ub",
+  "hash": "0x0FDCABCD",
+  "w": 256,
+  "h": 256,
+  "tris": 2215
+ },
+ {
+  "name": "oc_hum_mercenary_a_head",
+  "hash": "0x8ADAF8B6",
+  "w": 256,
+  "h": 256,
+  "tris": 496
+ }
+]

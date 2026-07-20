@@ -1,0 +1,37 @@
+[
+ {
+  "name": "gr_hum_boss_fake_head",
+  "hash": "0xC2D68CFA",
+  "w": 1024,
+  "h": 1024,
+  "tris": 255
+ },
+ {
+  "name": "tex_0xE8E3BF4D",
+  "hash": "0xE8E3BF4D",
+  "w": 512,
+  "h": 512,
+  "tris": 510
+ },
+ {
+  "name": "gr_hum_boss_fake_beard",
+  "hash": "0x02E3A9A2",
+  "w": 1024,
+  "h": 1024,
+  "tris": 696
+ },
+ {
+  "name": "gr_hum_boss_fake_hair",
+  "hash": "0x187475A8",
+  "w": 1024,
+  "h": 1024,
+  "tris": 720
+ },
+ {
+  "name": "tex_0xE27C6F51",
+  "hash": "0xE27C6F51",
+  "w": 64,
+  "h": 128,
+  "tris": 660
+ }
+]

@@ -1,107 +1,109 @@
 # mercs2-skinner
 
-> ## ⚠ UNVERIFIED — nothing this tool produces has been loaded in the game yet
->
-> The DXT1/UCFX encoder is held **byte-identical** to the community project's reference
-> script (see [Tests](#tests)), and the whole flow was exercised in a browser. But no skin
-> built here has been injected and seen on screen, and the additive
-> `inject_parts --repoint` step is written from that tool's documented interface rather
-> than from a run that completed. Treat the output as a candidate, not a result.
->
-> If you try it, please open an issue with what you saw.
+Make new skins for Mercenaries 2 characters, in your browser.
 
-Browser tool for painting new skins onto existing Mercenaries 2 characters. Exports either
-a **modkit mod** (no command line) or a **new, additional asset** that leaves the original
-character intact.
+**→ https://loganw234.github.io/mercs2-skinner/**
 
-Open **`dist/mercs2-skinner.html`**. One self-contained file: no install, no network, no
-server. (`open.cmd` on Windows.)
+Or download [`dist/mercs2-skinner.html`](dist/mercs2-skinner.html) and open it offline — one
+self-contained file, no install, no network, no server.
+
+It starts by asking what you want to do and which character, then writes out the exact
+command to get that character out of the game. If you only want to *paint* something, it
+hands you a ready-made template and you need no game tools at all until you want to put the
+result back in.
+
+---
+
+## Status: confirmed working in game
+
+**256 custom skins, loaded and cycled in a running game** (2026-07-20). Everything below is
+measured, not projected.
+
+| | |
+|---|---|
+| skins proven simultaneously | **256** on one character |
+| additive assets in one patch | 512 (256 models + 256 textures), 100.8 MB |
+| encode time | 256 sheets in **6 s** |
+| pack time | 512 assets in **0.4 s** |
+| base game modified | **none** — everything ships in a patch WAD |
 
 ## Why it exists
 
 The bytes were never the hard part — the community toolchain already decodes every texture
 to PNG and re-encodes them. The hard part is that a texture sheet on its own is
-**unpaintable**: open `tex_0x17DF83D8.png` and you get a 256×256 smear with no way to tell
-a sleeve from a jaw. The UV layout that would tell you is sitting in the same export folder
-and nothing joins them up.
+**unpaintable**: open one and you get a smear of skin tones with no way to tell a sleeve
+from a jaw. The UV layout that would tell you is sitting in the same export folder and
+nothing joins them up.
 
-So this tool draws the model's **UV wireframe over the texture**, shows the result on the
-model in 3D, and exports an engine-ready container.
+So this draws the model's **UV layout over the texture**, shows the result on the model in
+3D, lets you recolour it in place, and exports something the game can load.
 
-## Two ways out, for two crowds
+## What you can do
+
+**Recolour without leaving the page.** Click a colour on the sheet, move the hue /
+saturation / brightness sliders. Selection is by hue rather than RGB distance, so a garment
+in shadow and the same garment in light are picked up together while the skin beside them is
+not. Saturation and value are multiplied rather than replaced, so folds survive.
+
+**Paint properly.** Save the sheet with its UV wireframe as a template, edit it anywhere,
+drop it back in.
+
+**Start with no install at all.** Ready-made templates ship with the tool: every UV island
+filled flat and coloured by the body part that drives it, so a shape reads as "right
+forearm" rather than "some blob". They contain no game artwork, which is exactly why they
+can be handed out.
+
+## Two ways out
 
 | | **A · Modkit mod** | **B · New asset** |
 |---|---|---|
-| for | "I just want to recolour this" | "I want a totally new skin" |
-| does | replaces the character's own textures | mints a **new** texture set + a **new** model asset |
-| you get | PNGs + `mod.json` in a zip | `.ucfx` containers + a build script |
-| packing | the modkit does everything | three commands (script included) |
-| original | restored by uninstalling the mod | never touched; both coexist |
-| geometry | **correct** — model untouched | **coarse LOD only** (see below) |
-| in game | the character just looks different | `Player.SetOutfit(char, "your_skin")` |
+| for | "recolour this character" | "add outfits that coexist" |
+| does | replaces the character's own textures | mints a **new** model + textures |
+| you get | PNGs + `mod.json` | `.ucfx` containers + a build script |
+| packing | the modkit does everything | two commands (script included) |
+| original | restored by uninstalling | never touched |
+| geometry | always correct | correct on single-block characters |
+| how many | one variant per character | **effectively unlimited** |
 
-**A** exists because the modkit already solves the hard part. Its texture-swap contract is
-just `{name, image_path}` — it does the DXT1 encode, the fully-resident container, the WAD
-assembly, the load order and the merge with your other installed mods. So this path stops
-at PNGs plus a definition and gets out of the way. That needs the texture's **engine name**,
-which the export bundle does not carry, so names are recovered by hashing a 10,047-entry
-list back through `pandemic_hash_m2` — which is also why the UI can say "upper body"
-instead of `0x17DF83D8`.
+**A** exists because the modkit already solves the hard part — its texture-swap contract is
+just `{name, image_path}`, and it handles the encode, the container, the WAD assembly and
+the merge with your other mods.
 
-**B** exists for skins that should be a *new outfit* rather than a replacement, and for the
-few textures whose names were never recovered (those cannot be swapped by name at all). It
-clones the donor's original block bytes into a new-hash model whose materials point at your
-textures, so the original character is untouched and yours is selectable by name.
+**B** is for skins that should be a *new outfit* rather than a replacement.
 
-Both cover **every** sheet you edited. That matters more than it sounds: this character
-splits into head / upper body / lower body / hair, so a uniform spans several textures and
-exporting one at a time gives you a repainted torso on a stock face. The tool warns when
-sheets are left original.
+## Which characters can host new outfits
 
-## Flow
+Not all of them, and the reason is structural rather than arbitrary.
 
-```
-mercs2_workshop --export-bundle <character> --out mychar
-        │  manifest.json · model.gltf · model.bin · textures/*.png · raw/*.ucfx
-        ▼
-   ★ mercs2-skinner ★     drop the folder · pick a texture · paint · preview
-        │
-        ├─ A: <name>-modkit.zip     (PNGs + mod.json — the modkit packs it)
-        └─ B: <name>-assets.zip     (.ucfx containers + build.sh)
-```
+A model's LOD chain lives in its ASET row: the packed block reference decodes to
+`(block, sub)`, where `sub` is the index of a **second block** holding the finer geometry,
+or `65535` for none. Cloning copies one block, so:
 
-1. **Export a bundle** with `mercs2_workshop` (in the community project's
-   [releases](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/releases)).
-2. **Drop the folder** into the tool.
-3. **Pick a texture.** They are listed diffuse-first with their role, size and triangle count.
-4. **Save the sheet as PNG** with the wireframe on — that is your paint template. Edit it
-   anywhere, then **Replace** it back in. Non-matching sizes are resampled to the original
-   sheet size, because the texture pool has a hard cell cap and upscaling a 256 sheet to
-   1024 costs 16× the budget for no visible gain at gameplay distance.
-5. **Check the 3D preview**, then export.
+* **Single-block characters clone perfectly.** All their geometry is in one place.
+* **Two-block characters lose their detail rungs** and render their coarsest tier at every
+  distance — a visibly flattened face.
 
-## ⚠ The new-asset path renders at the coarsest LOD
+The tool's character picker knows which is which and only offers the safe ones for new
+outfits. Full detail in [docs/LOD-CHAIN.md](docs/LOD-CHAIN.md).
 
-Confirmed in game, 2026-07-20. A new-asset skin looks right in colour but its **face
-visibly flattens**, because the clone carries only the RESIDENT block.
+Everything else can still be **reskinned in place**, which never clones anything and so is
+always geometrically correct.
 
-A character's geometry is split across two blocks. The resident one (`_P000`) holds the
-material bindings and the coarsest tier — on `civ_hum_beachfemale_a` that is **639
-triangles**. The finer rungs live in `_P001`, which is **pure geometry with no MTRL chunk
-at all** and is located by PATH naming, not by hash. `mercs2_smuggler --inject-extra` gives
-a block a hash but no path, so a cloned model has no `_P001` sibling for the engine to
-find, and the coarse tier renders at every distance — 639 triangles instead of 3,856.
+## How many skins can you actually have
 
-That is a limitation of the published tooling, not something this tool can work around:
-fixing it needs path control over injected blocks so the sibling rung can be named.
+Measured and reasoned, in the order you would hit them:
 
-**So choose deliberately:**
+1. **Hash collisions** — `pandemic_hash_m2` is 32-bit and the game already holds 30,645
+   assets. A collision doesn't error; it silently replaces whatever it lands on. Roughly
+   0.2% at 256 new assets, 3.5% at 5,000, 13% at 20,000. The tool warns when a generated
+   name resolves to something real.
+2. **Patch size** — about 600 KB per variant with a 512² donor. 1,000 variants ≈ 600 MB.
+3. **Format ceiling** — the ASET block index is a `u16`, so 65,535 blocks per patch, which
+   is ~32,767 variants. Nowhere near it.
+4. **Texture pool** — the 5,120-cell cap counts *simultaneously resident* textures, not
+   total. 256 variants worn one at a time cost one.
 
-* **One good-looking recolour → modkit export.** It never clones the model, so geometry and
-  LODs are untouched and correct.
-* **Several skins coexisting → new asset**, and accept the coarse mesh. There is no way to
-  have both today: an override can only produce one variant at a time, because every
-  variant would claim the same texture hash.
+Nobody is going to run out.
 
 ## Tests
 
@@ -109,89 +111,54 @@ fixing it needs path control over injected blocks so the sibling rung can be nam
 npm test
 ```
 
-95 assertions. The core one is byte-parity: `src/texture.js` is a port of the community
-project's `dds_to_ucfx_texture.py` (vendored under `tools/reference-python/`), which
-reverse-engineered the container layout and the fully-resident `INFO` flags — so **that
-script is the specification**, not this port.
+95 assertions. The core ones are parity: `src/texture.js` is a port of the community
+project's `dds_to_ucfx_texture.py`, so **that script is the specification**, not this port.
 
 - **UCFX container byte-identical** to the reference encoder
 - `pandemic_hash_m2` verified against **all 80** recovered bone name/hash pairs
 - fully-resident invariants pinned: `INFO[26:32] == 0`, the `0xFFFF` sentinel, and
-  `BODY == mipChainSize(w,h)` — a wrong BODY length is the documented `BUFFER_TOO_SMALL`
-  streaming over-read
-- UV extraction checked against a real bundle: finest LOD only, UVs inside `[0,1]`,
-  index buffers in range
-- both export paths cover every edited sheet, and a texture with no recovered name is
-  *reported* rather than silently dropped from the modkit swap list
+  `BODY == mipChainSize(w,h)` — a wrong BODY length is a documented `BUFFER_TOO_SMALL`
+  over-read
+- UV extraction: finest LOD only, UVs inside `[0,1]`, index buffers in range
+- recolour: hue selection separates fabric from skin, shading survives a shift, and the
+  selection still resolves after a shift is applied
 
-The primary parity fixture is **synthetic** (`tools/make_synthetic_fixture.py`) — a
-procedural image built to be hostile to a block compressor (smooth ramps, hard checker
-edges, noise, flat blocks). That way a fresh clone runs full byte-parity with **no
-extracted game art committed**. A second case at 1024²/9 mips uses a real game sheet and
-skips itself when absent.
-
-## Bulk test: 16 skins, 48 assets
-
-A full run of the new-asset path, to test capacity rather than one-off correctness:
-16 hue-shifted variants of one character's swimsuit, each a separately named NPC skin.
-
-| step | result |
-|---|---|
-| recolour (suit pixels only, hue swapped, sat/value kept) | 316,144 px across 32 sheets |
-| encode to UCFX via `src/texture.js` | 32 containers, **0.2 s** |
-| clone + repoint the model 16× | 16 × 38,280 B, size unchanged, CSUM re-verified |
-| pack with `mercs2_smuggler --extra-only` | **48 blocks, 3.53 MB, 0.37 s** |
-| verify the ASET table | **48/48 assets resolve**, no hash collisions |
-
-Two corrections came out of doing it for real rather than from reading flags:
-
-* **`inject_parts --repoint` cannot do a reskin.** It requires at least one `--part`, so it
-  cannot express "same mesh, different textures" — it prints usage and refuses. Nothing
-  published does a repoint-only clone, so `tools/repoint_model.py` does it: rewrite the
-  4-byte texture hashes inside `MTRL`, fix the trailing CSUM, copy every other byte
-  verbatim, then re-read and re-verify. A reskin has no business touching geometry.
-* **The pack needs `--extra-only`**, or smuggler edits a donor block and the result stops
-  being additive.
-
-The generated command block now emits exactly the sequence that was run.
+The parity fixture is **synthetic** — a procedural image built to be hostile to a block
+compressor — so a fresh clone runs full byte-parity with no extracted game art committed.
 
 ## Getting the float arithmetic right
 
-Worth recording, since it cost the only real debugging in the port: the first attempt
-differed in **90 bytes out of 699,188**, all of them *index* bits rather than colour
-endpoints. numpy computes the DXT palette and the nearest-colour search in **float32**, and
-doing the same work in JavaScript's float64 picks a different palette entry for pixels
-sitting near the midpoint of the two interpolated colours. `Math.fround` at each step of
-the subtract, the square and the 3-element reduction makes it exact.
+The first port of the encoder differed in **90 bytes out of 699,188**, all of them *index*
+bits rather than colour endpoints. numpy computes the DXT palette and the nearest-colour
+search in **float32**, and doing the same work in float64 picks a different palette entry
+for pixels sitting near the midpoint of the two interpolated colours. `Math.fround` at each
+step makes it exact.
 
 Mip generation needed no such care — box-filtering integers stays exactly representable all
-the way down (a 1024 sheet's deepest mip needs 24 mantissa bits, precisely what float32
-has), so those values agree in either precision.
+the way down.
 
 ## Credits
 
 The Mercenaries 2 file formats, the `mercs2_workshop` exporter, the texture decode/encode
-and the `inject_parts` repointing all come from
+and the WAD tooling all come from
 [**Mercenaries-Fan-Build/mercs2-wad-simulator**](https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator).
-This repo is a front end over their work: it joins the pieces their export already produces
-and re-implements one encoder in JavaScript so the whole loop runs in a browser.
+This repo is a front end over their work.
 
 `tools/reference-python/` is their `mercs2-mesh-pipeline-scripts.zip`, vendored unmodified
-so the parity test has something to check against. No compiled community code is
-redistributed — get `mercs2_workshop` from their releases.
+so the parity test has something to check against. No compiled community code and no game
+asset is redistributed here.
 
 Not affiliated with or endorsed by EA or Pandemic Studios.
 
 ## Not done
 
 - **Normal maps.** Mercs2 stores them as **DXT5nm** with `normal.x` in the alpha channel;
-  only the DXT1 diffuse path is implemented. Their `nm_to_ucfx_dxt5nm.py` handles it today.
-- **No freehand painting in-tool.** There is a hue/saturation/brightness recolour, which
-  covers most recolour requests, but anything beyond that round-trips through your own
-  image editor.
-- **Neither install path has been run end to end.** The modkit definition matches its
-  `TextureSwap {name, image_path}` contract as read from source, and the new-asset command
-  block is generated from documented flags — but nobody has packed either and launched.
-- **No texture-sharing check across characters** — the warning only covers draw groups
-  within the loaded model. A texture shared with a *different* character would not be
-  flagged.
+  only the DXT1 diffuse path is implemented here. Their `nm_to_ucfx_dxt5nm.py` handles it.
+- **No freehand painting** — the recolour covers hue/saturation/brightness, anything else
+  round-trips through your own image editor.
+- **Two-block characters cannot host new outfits.** Fixing it upstream is small: let the
+  injector write `packed_block_ref = (resident << 16) | lod_block` instead of forcing
+  `65535`. `AsetEntry` already exposes it.
+- **Some characters cannot be exported at all** — they exist only as shared sub-entries with
+  no model row of their own, so there is nothing to pull out. `pmc_hum_jennifer` is the
+  well-known case.

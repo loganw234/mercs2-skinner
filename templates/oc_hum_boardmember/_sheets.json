@@ -1,0 +1,16 @@
+[
+ {
+  "name": "oc_hum_boardmember_head",
+  "hash": "0x4A0B28C8",
+  "w": 256,
+  "h": 256,
+  "tris": 391
+ },
+ {
+  "name": "tex_0xE27C6F51",
+  "hash": "0xE27C6F51",
+  "w": 64,
+  "h": 128,
+  "tris": 1415
+ }
+]

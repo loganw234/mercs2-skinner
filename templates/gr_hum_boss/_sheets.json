@@ -1,0 +1,58 @@
+[
+ {
+  "name": "tex_0x39C54DA2",
+  "hash": "0x39C54DA2",
+  "w": 1024,
+  "h": 1024,
+  "tris": 434
+ },
+ {
+  "name": "gr_hum_boss_hair",
+  "hash": "0x1738E48A",
+  "w": 1024,
+  "h": 1024,
+  "tris": 1145
+ },
+ {
+  "name": "gr_hum_boss_head",
+  "hash": "0x83A5B740",
+  "w": 1024,
+  "h": 1024,
+  "tris": 2046
+ },
+ {
+  "name": "gr_hum_boss_lb",
+  "hash": "0x4581F210",
+  "w": 1024,
+  "h": 1024,
+  "tris": 1868
+ },
+ {
+  "name": "gr_hum_boss_ub",
+  "hash": "0xB528BC9F",
+  "w": 1024,
+  "h": 1024,
+  "tris": 5012
+ },
+ {
+  "name": "tex_0xE27C6F51",
+  "hash": "0xE27C6F51",
+  "w": 64,
+  "h": 128,
+  "tris": 2190
+ },
+ {
+  "name": "pmc_hum_chris_eyes",
+  "hash": "0x82569011",
+  "w": 128,
+  "h": 128,
+  "tris": 312
+ },
+ {
+  "name": "tex_0x5AAB9E8A",
+  "hash": "0x5AAB9E8A",
+  "w": 64,
+  "h": 64,
+  "tris": 312
+ }
+]

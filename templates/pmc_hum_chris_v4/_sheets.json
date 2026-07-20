@@ -1,0 +1,51 @@
+[
+ {
+  "name": "pmc_hum_chris_v4_lb",
+  "hash": "0x657FC252",
+  "w": 512,
+  "h": 512,
+  "tris": 4948
+ },
+ {
+  "name": "pmc_hum_chris_v4_head",
+  "hash": "0xE7202486",
+  "w": 512,
+  "h": 512,
+  "tris": 13281
+ },
+ {
+  "name": "pmc_hum_chris_v4_ub",
+  "hash": "0xA2AFC889",
+  "w": 512,
+  "h": 512,
+  "tris": 5628
+ },
+ {
+  "name": "pmc_hum_chris_v2_glasses",
+  "hash": "0x82F3AEA2",
+  "w": 128,
+  "h": 128,
+  "tris": 770
+ },
+ {
+  "name": "pmc_hum_chris_eyes",
+  "hash": "0x82569011",
+  "w": 128,
+  "h": 128,
+  "tris": 424
+ },
+ {
+  "name": "tex_0x5AAB9E8A",
+  "hash": "0x5AAB9E8A",
+  "w": 64,
+  "h": 64,
+  "tris": 312
+ },
+ {
+  "name": "tex_0xE27C6F51",
+  "hash": "0xE27C6F51",
+  "w": 64,
+  "h": 128,
+  "tris": 3728
+ }
+]

@@ -1,0 +1,51 @@
+[
+ {
+  "name": "tex_0xF4AECC79",
+  "hash": "0xF4AECC79",
+  "w": 256,
+  "h": 256,
+  "tris": 281
+ },
+ {
+  "name": "gr_hum_advisor_lb",
+  "hash": "0xEEBF4EF9",
+  "w": 512,
+  "h": 512,
+  "tris": 1326
+ },
+ {
+  "name": "gr_hum_advisor_ub",
+  "hash": "0x0F044C62",
+  "w": 512,
+  "h": 512,
+  "tris": 4718
+ },
+ {
+  "name": "gr_hum_advisor_head",
+  "hash": "0x88F5E975",
+  "w": 512,
+  "h": 512,
+  "tris": 5010
+ },
+ {
+  "name": "tex_0xE27C6F51",
+  "hash": "0xE27C6F51",
+  "w": 64,
+  "h": 128,
+  "tris": 1304
+ },
+ {
+  "name": "pmc_hum_chris_eyes",
+  "hash": "0x82569011",
+  "w": 128,
+  "h": 128,
+  "tris": 300
+ },
+ {
+  "name": "tex_0x5AAB9E8A",
+  "hash": "0x5AAB9E8A",
+  "w": 64,
+  "h": 64,
+  "tris": 312
+ }
+]

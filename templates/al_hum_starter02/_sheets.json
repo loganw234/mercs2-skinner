@@ -1,0 +1,44 @@
+[
+ {
+  "name": "tex_0x616F7AF4",
+  "hash": "0x616F7AF4",
+  "w": 512,
+  "h": 512,
+  "tris": 482
+ },
+ {
+  "name": "al_hum_starter02_head",
+  "hash": "0x1D038EA8",
+  "w": 512,
+  "h": 512,
+  "tris": 4035
+ },
+ {
+  "name": "al_hum_starter02_lb",
+  "hash": "0x3D0F8738",
+  "w": 512,
+  "h": 512,
+  "tris": 1334
+ },
+ {
+  "name": "al_hum_starter02_ub",
+  "hash": "0xFD0E4D57",
+  "w": 512,
+  "h": 512,
+  "tris": 2432
+ },
+ {
+  "name": "tex_0xE27C6F51",
+  "hash": "0xE27C6F51",
+  "w": 64,
+  "h": 128,
+  "tris": 656
+ },
+ {
+  "name": "tex_0x5AAB9E8A",
+  "hash": "0x5AAB9E8A",
+  "w": 64,
+  "h": 64,
+  "tris": 304
+ }
+]

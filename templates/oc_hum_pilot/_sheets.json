@@ -1,0 +1,16 @@
+[
+ {
+  "name": "oc_hum_pilot_helmet",
+  "hash": "0x24D47735",
+  "w": 128,
+  "h": 128,
+  "tris": 722
+ },
+ {
+  "name": "tex_0xE27C6F51",
+  "hash": "0xE27C6F51",
+  "w": 64,
+  "h": 128,
+  "tris": 1430
+ }
+]
