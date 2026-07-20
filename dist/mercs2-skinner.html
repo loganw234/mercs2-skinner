@@ -1,0 +1,1242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mercs2-skinner — new skins for Mercenaries 2 models</title>
+<style>
+  :root {
+    --bg:#0b1220; --panel:#111a2b; --panel2:#16213a; --line:#223049;
+    --fg:#e2e8f0; --dim:#94a3b8; --faint:#64748b;
+    --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --accent:#60a5fa; --uv:#ff40a0;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:13px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  code, pre { font-family:ui-monospace, "Cascadia Code", Consolas, monospace; }
+  header { padding:14px 20px; border-bottom:1px solid var(--line); background:var(--panel);
+           display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  header h1 { font-size:15px; margin:0; font-weight:600; }
+  header .sub { color:var(--faint); font-size:12px; }
+  main { max-width:1500px; margin:0 auto; padding:20px; }
+  section { margin-bottom:22px; }
+  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.09em; color:var(--dim);
+       margin:0 0 10px; font-weight:600; }
+  h2 .n { display:inline-block; width:18px; height:18px; line-height:18px; text-align:center;
+          border-radius:50%; background:var(--panel2); color:var(--accent); margin-right:7px; font-size:11px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px; }
+  .drop { border:1.5px dashed var(--line); border-radius:8px; padding:18px; text-align:center;
+          cursor:pointer; background:var(--panel); transition:.12s; }
+  .drop:hover, .drop.over { border-color:var(--accent); background:var(--panel2); }
+  .drop input { display:none; }
+  .drop b { display:block; margin-bottom:3px; }
+  .drop .hint { color:var(--faint); font-size:12px; }
+  .fname { color:var(--ok); font-size:12px; margin-top:8px; }
+
+  .edit { display:grid; grid-template-columns:270px minmax(320px,1fr) minmax(280px,420px); gap:14px; }
+  @media (max-width:1200px){ .edit { grid-template-columns:1fr; } }
+  #tex-list { display:flex; flex-direction:column; gap:4px; max-height:520px; overflow-y:auto; }
+  .tex-row { display:grid; grid-template-columns:auto 1fr auto; gap:6px; align-items:center;
+             background:var(--panel2); border:1px solid var(--line); border-radius:6px;
+             padding:6px 8px; cursor:pointer; text-align:left; color:var(--fg); font:inherit; }
+  .tex-row:hover { border-color:var(--accent); }
+  .tex-row.sel { outline:1px solid var(--accent); background:#1d2c47; }
+  .role { font-size:10px; padding:1px 6px; border-radius:10px; border:1px solid var(--line); color:var(--dim); }
+  .role.diffuse { color:var(--ok); border-color:#1e5236; }
+  .role.normal { color:var(--accent); border-color:#1e3a5f; }
+  .role.specular { color:var(--warn); border-color:#5a4517; }
+  .thash { font-family:ui-monospace,monospace; font-size:11px; }
+  .tdim, .ttri { color:var(--faint); font-size:11px; }
+  .badge { font-size:10px; padding:1px 6px; border-radius:10px; border:1px solid var(--line); }
+  .badge.edited { color:var(--warn); border-color:#5a4517; }
+  .badge.missing { color:var(--bad); border-color:#5a2020; }
+
+  .canvas-wrap { background:#07101d; border:1px solid var(--line); border-radius:6px;
+                 overflow:auto; max-height:520px; display:flex; align-items:center; justify-content:center; }
+  #tex-canvas { max-width:100%; height:auto; image-rendering:pixelated; display:block; }
+  #preview { width:100%; height:400px; display:block; background:#07101d;
+             border:1px solid var(--line); border-radius:6px; cursor:grab; }
+  #preview:active { cursor:grabbing; }
+  .row-tools { display:flex; gap:12px; align-items:center; margin:8px 0; flex-wrap:wrap; color:var(--faint); font-size:12px; }
+  label.opt { display:flex; align-items:center; gap:6px; color:var(--dim); cursor:pointer; }
+
+  .btn { background:var(--accent); color:#06121f; border:0; border-radius:6px; padding:8px 14px;
+         font:inherit; font-weight:600; cursor:pointer; }
+  .btn.ghost { background:var(--panel2); color:var(--fg); border:1px solid var(--line); font-weight:400; }
+  .btn:disabled { opacity:.45; cursor:not-allowed; }
+  input[type=text] { background:var(--panel2); color:var(--fg); border:1px solid var(--line);
+                     border-radius:5px; padding:7px 9px; font:inherit; width:100%; }
+  .chip { display:inline-block; padding:3px 9px; border-radius:5px; font-size:11px; margin:0 6px 6px 0;
+          border:1px solid var(--line); background:var(--panel); color:var(--dim); }
+  .chip.bad { color:var(--bad); border-color:#5a2020; }
+  pre { background:#070d18; border:1px solid var(--line); border-radius:6px; padding:12px;
+        overflow-x:auto; font-size:12px; color:#cbd5e1; margin:0; }
+  #status,#error,#note { padding:9px 12px; border-radius:6px; margin-bottom:12px; font-size:12px; }
+  #status { background:var(--panel2); color:var(--dim); }
+  #error { background:#2a1114; color:#fca5a5; border:1px solid #5a2020; white-space:pre-wrap; }
+  #note { background:var(--panel2); color:var(--warn); }
+  .warnbox { background:#2a2211; border:1px solid #5a4517; color:#fde68a; padding:9px 12px;
+             border-radius:6px; font-size:12px; margin-bottom:10px; }
+  .badge.unverified { color:#fde68a; border-color:#5a4517; background:#2a2211;
+                      letter-spacing:.06em; font-weight:600; padding:2px 8px; }
+  .muted { color:var(--dim); font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>mercs2-skinner</h1>
+  <span class="sub">paint new skins for existing Mercenaries&nbsp;2 models</span>
+  <span class="badge unverified" title="No skin built by this tool has been loaded in the game yet.">UNVERIFIED</span>
+</header>
+
+<main>
+  <div class="warnbox">
+    <b>Nothing this tool produces has been loaded in the game yet.</b>
+    The DXT1/UCFX encoder is byte-identical to the community project's reference script,
+    but no skin built here has been injected and seen on screen. The additive
+    <code>inject_parts --repoint</code> path in step&nbsp;3 is written from the tool's
+    documented interface and has not been run end to end.
+  </div>
+  <div id="status" hidden></div>
+  <div id="note" hidden></div>
+  <div id="error" hidden></div>
+
+  <section>
+    <h2><span class="n">1</span>Bundle</h2>
+    <label class="drop" id="drop">
+      <input type="file" id="bundle-input" webkitdirectory directory multiple>
+      <b>Drop an export-bundle folder</b>
+      <span class="hint"><code>mercs2_workshop --export-bundle &lt;character&gt; --out &lt;dir&gt;</code></span>
+    </label>
+    <div class="fname" id="bundle-name"></div>
+    <div class="muted" style="margin-top:8px">
+      Everything comes from that folder — the decoded PNGs, the UV layout, the material
+      bindings and the original block bytes the new asset is cloned from.
+    </div>
+  </section>
+
+  <section id="step-edit" hidden>
+    <h2><span class="n">2</span>Texture</h2>
+    <div class="edit">
+      <div class="panel">
+        <div id="tex-list"></div>
+      </div>
+      <div class="panel">
+        <div style="font-weight:600" id="tex-title"></div>
+        <div class="muted" id="tex-sub"></div>
+        <div class="row-tools">
+          <label class="opt"><input type="checkbox" id="show-uv" checked> UV wireframe</label>
+          <span id="uv-count"></span>
+        </div>
+        <div class="canvas-wrap"><canvas id="tex-canvas"></canvas></div>
+        <div class="row-tools" style="margin-top:10px">
+          <label class="btn ghost" style="cursor:pointer">
+            Replace with image…<input type="file" id="replace-input" accept="image/*" style="display:none">
+          </label>
+          <button class="btn ghost" id="btn-png">Save sheet as PNG</button>
+          <button class="btn ghost" id="btn-revert" disabled>Revert</button>
+        </div>
+        <div class="muted">
+          Save the sheet with the wireframe on to get a paint template, edit it in any
+          image editor, then bring it back with <em>Replace</em>.
+        </div>
+      </div>
+      <div class="panel">
+        <canvas id="preview"></canvas>
+        <div class="muted" id="preview-note" style="margin-top:8px"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="step-export" hidden>
+    <h2><span class="n">3</span>Export as a new asset</h2>
+    <div class="panel">
+      <div style="max-width:420px;margin-bottom:10px">
+        <label class="muted" for="skin-name">New skin name</label>
+        <input type="text" id="skin-name" placeholder="my_custom_skin">
+      </div>
+      <div class="muted" id="hashes" style="font-family:ui-monospace,monospace;margin-bottom:10px"></div>
+      <div class="warnbox" id="shared-warn" hidden></div>
+      <div id="checks"></div>
+      <div class="row-tools">
+        <button class="btn" id="btn-ucfx">Download .ucfx texture</button>
+        <span class="muted" id="export-hint"></span>
+      </div>
+      <pre id="cmd" style="margin-top:12px"></pre>
+      <div class="muted" style="margin-top:10px">
+        This mints a <b>new</b> texture and a <b>new</b> model asset. The original
+        character keeps its own texture — nothing is overwritten, and both can coexist in
+        the same patch WAD.
+      </div>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+// ===== src/bundle.js =====
+// Reader for a `mercs2_workshop --export-bundle <name>` folder.
+//
+// The bundle already contains everything a reskin needs, it is just not usable as-is:
+//   manifest.json  draw_groups[] -> {diffuse, normal, specular} texture hashes per group
+//   model.gltf     the mesh, with TEXCOORD_0 on every primitive
+//   model.bin      the vertex data
+//   textures/      every texture already decoded to PNG
+//   raw/           the ORIGINAL block bytes, which the additive path uses as a template
+//
+// This module joins them so a texture can be shown with the UV layout that actually maps
+// onto it -- without that, painting a 1024x1024 sheet is guesswork.
+
+const COMPONENT = {
+  5120: { get: (dv, o) => dv.getInt8(o), size: 1 },
+  5121: { get: (dv, o) => dv.getUint8(o), size: 1 },
+  5122: { get: (dv, o) => dv.getInt16(o, true), size: 2 },
+  5123: { get: (dv, o) => dv.getUint16(o, true), size: 2 },
+  5125: { get: (dv, o) => dv.getUint32(o, true), size: 4 },
+  5126: { get: (dv, o) => dv.getFloat32(o, true), size: 4 },
+};
+const NCOMP = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT4: 16 };
+
+function accessor(gltf, bin, idx) {
+  const a = gltf.accessors[idx];
+  const n = NCOMP[a.type];
+  const comp = COMPONENT[a.componentType];
+  if (!comp) throw new Error('unsupported componentType ' + a.componentType);
+  const bv = gltf.bufferViews[a.bufferView];
+  const base = (bv.byteOffset || 0) + (a.byteOffset || 0);
+  const stride = bv.byteStride || comp.size * n;
+  const dv = new DataView(bin);
+  const out = new Float32Array(a.count * n);
+  for (let i = 0; i < a.count; i++) {
+    for (let c = 0; c < n; c++) out[i * n + c] = comp.get(dv, base + i * stride + c * comp.size);
+  }
+  return { data: out, count: a.count, n };
+}
+
+const roleOf = (mat, hash) => {
+  const e = mat.extras || {};
+  const r = [];
+  if (e.diffuse === hash) r.push('diffuse');
+  if (e.normal === hash) r.push('normal');
+  if (e.specular === hash) r.push('specular');
+  return r;
+};
+
+/** Parse `LOD0_group2_seg10_node0` -> {lod:0, group:2, seg:10}. Purely for labelling. */
+function parseMeshName(name) {
+  const m = /LOD(\d+)_group(\d+)_seg(\d+)/.exec(name || '');
+  return m ? { lod: +m[1], group: +m[2], seg: +m[3] } : null;
+}
+
+/**
+ * @param {{manifest:object, gltf:object, bin:ArrayBuffer, textureFiles:Map<string,{width,height}>}} src
+ */
+function readBundle({ manifest, gltf, bin, textureFiles = new Map() }) {
+  const byHash = new Map();
+  for (const t of manifest.textures || []) {
+    byHash.set(t.hash, {
+      hash: t.hash,
+      file: t.file,
+      width: t.width,
+      height: t.height,
+      declaredWidth: t.declared_width,
+      declaredHeight: t.declared_height,
+      fullResolution: t.full_resolution,
+      roles: new Set(),
+      groups: [],
+      primitives: [],
+      triangles: 0,
+    });
+  }
+
+  // Walk every primitive once, attributing it to whichever textures its material names.
+  const prims = [];
+  (gltf.meshes || []).forEach((mesh, mi) => {
+    const label = parseMeshName(mesh.name);
+    mesh.primitives.forEach((p, pi) => {
+      const mat = gltf.materials[p.material] || { extras: {} };
+      const rec = { meshIndex: mi, primIndex: pi, name: mesh.name, label, material: mat, prim: p };
+      prims.push(rec);
+      for (const [hash, tex] of byHash) {
+        const roles = roleOf(mat, hash);
+        if (!roles.length) continue;
+        roles.forEach((r) => tex.roles.add(r));
+        tex.primitives.push(rec);
+        if (label) tex.groups.push(label);
+      }
+    });
+  });
+
+  // Triangle counts and the LOD rung each texture is used at, for labelling.
+  for (const tex of byHash.values()) {
+    for (const rec of tex.primitives) {
+      const p = rec.prim;
+      if (p.indices !== undefined) tex.triangles += Math.floor(gltf.accessors[p.indices].count / 3);
+    }
+  }
+
+  const textures = [...byHash.values()].map((t) => ({
+    ...t,
+    roles: [...t.roles],
+    // Only the finest LOD rung is worth showing UVs for; coarser rungs reuse the sheet.
+    bestLod: t.groups.length ? Math.min(...t.groups.map((g) => g.lod)) : null,
+  })).sort((a, b) => {
+    const rank = (x) => (x.roles.includes('diffuse') ? 0 : x.roles.includes('normal') ? 1 : x.roles.includes('specular') ? 2 : 3);
+    return rank(a) - rank(b) || b.triangles - a.triangles;
+  });
+
+  return {
+    name: manifest.name || 'model',
+    modelHash: manifest.model_hash,
+    skinned: manifest.skinned,
+    manifest,
+    gltf,
+    bin,
+    textures,
+    prims,
+    /** UV triangles (in 0..1) for every primitive that uses `hash`, finest LOD only. */
+    uvTriangles(hash) {
+      const tex = textures.find((t) => t.hash === hash);
+      if (!tex) return [];
+      const lod = tex.bestLod;
+      const out = [];
+      for (const rec of tex.primitives) {
+        if (lod !== null && rec.label && rec.label.lod !== lod) continue;
+        const p = rec.prim;
+        if (p.attributes.TEXCOORD_0 === undefined || p.indices === undefined) continue;
+        const uv = accessor(gltf, bin, p.attributes.TEXCOORD_0);
+        const ix = accessor(gltf, bin, p.indices);
+        for (let i = 0; i + 2 < ix.count; i += 3) {
+          const a = ix.data[i], b = ix.data[i + 1], c = ix.data[i + 2];
+          out.push([uv.data[a * 2], uv.data[a * 2 + 1],
+                    uv.data[b * 2], uv.data[b * 2 + 1],
+                    uv.data[c * 2], uv.data[c * 2 + 1]]);
+        }
+      }
+      return out;
+    },
+    /** Interleaved geometry for the WebGL preview: finest LOD, primitives using `hash`. */
+    geometryFor(hash) {
+      const tex = textures.find((t) => t.hash === hash);
+      if (!tex) return null;
+      const lod = tex.bestLod;
+      const pos = [], uvs = [], nrm = [], idx = [];
+      let base = 0;
+      for (const rec of tex.primitives) {
+        if (lod !== null && rec.label && rec.label.lod !== lod) continue;
+        const p = rec.prim;
+        if (p.attributes.POSITION === undefined || p.indices === undefined) continue;
+        const P = accessor(gltf, bin, p.attributes.POSITION);
+        const T = p.attributes.TEXCOORD_0 !== undefined ? accessor(gltf, bin, p.attributes.TEXCOORD_0) : null;
+        const N = p.attributes.NORMAL !== undefined ? accessor(gltf, bin, p.attributes.NORMAL) : null;
+        const I = accessor(gltf, bin, p.indices);
+        for (let i = 0; i < P.count; i++) {
+          pos.push(P.data[i * 3], P.data[i * 3 + 1], P.data[i * 3 + 2]);
+          uvs.push(T ? T.data[i * 2] : 0, T ? T.data[i * 2 + 1] : 0);
+          nrm.push(N ? N.data[i * 3] : 0, N ? N.data[i * 3 + 1] : 1, N ? N.data[i * 3 + 2] : 0);
+        }
+        for (let i = 0; i < I.count; i++) idx.push(base + I.data[i]);
+        base += P.count;
+      }
+      if (!pos.length) return null;
+      return {
+        position: new Float32Array(pos),
+        uv: new Float32Array(uvs),
+        normal: new Float32Array(nrm),
+        index: new Uint32Array(idx),
+      };
+    },
+  };
+}
+
+/** Group the loose files a user dropped into the pieces a bundle needs. */
+function sortBundleFiles(files) {
+  const out = { manifest: null, gltf: null, bin: null, textures: new Map(), raw: new Map(), unknown: [] };
+  for (const f of files) {
+    const path = (f.webkitRelativePath || f.name).replace(/\\/g, '/');
+    const base = path.split('/').pop().toLowerCase();
+    if (base === 'manifest.json') out.manifest = f;
+    else if (base.endsWith('.gltf')) out.gltf = f;
+    else if (base.endsWith('.bin') && base !== 'model.bin' && !/\/textures\//.test(path)) out.bin = out.bin || f;
+    else if (base === 'model.bin') out.bin = f;
+    else if (base.endsWith('.png')) out.textures.set(base, f);
+    else if (base.endsWith('.ucfx')) out.raw.set(base, f);
+    else out.unknown.push(path);
+  }
+  return out;
+}
+
+const MISSING_HINT =
+  'Expected a folder produced by:  mercs2_workshop --export-bundle <character> --out <dir>\n' +
+  'It should contain manifest.json, model.gltf, model.bin, textures/ and raw/.';
+
+
+// ===== src/texture.js =====
+// Mercenaries 2 UCFX texture container writer.
+//
+// Port of the community project's `dds_to_ucfx_texture.py` (bundled for reference in
+// tools/reference-python/). That script is the SPECIFICATION -- test/texture.test.js
+// asserts this produces a byte-identical container -- because the byte layout was
+// reverse-engineered there, not here.
+//
+// The container is deliberately FULLY RESIDENT: INFO[26:32] = 0 plus the 0xFFFF sentinel
+// tells the engine not to stream the texture, and BODY is exactly the dimension-derived
+// mip chain. Getting that size wrong triggers a BUFFER_TOO_SMALL over-read in the
+// streaming path (documented in mercs2_formats::texsize), which is why the size is
+// derived rather than taken from the source file.
+
+/** CRC32 as Mercs2 uses it: the raw LFSR register starting at 0, with NO final inversion.
+ *  (Python `zlib.crc32(d, 0xFFFFFFFF) ^ 0xFFFFFFFF` reduces to exactly this.) */
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32Mercs2(bytes) {
+  let crc = 0;
+  for (let i = 0; i < bytes.length; i++) crc = (CRC_TABLE[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8)) >>> 0;
+  return crc >>> 0;
+}
+
+const to565 = (r, g, b) =>
+  (((Math.round(r) >> 3) & 0x1f) << 11) | (((Math.round(g) >> 2) & 0x3f) << 5) | ((Math.round(b) >> 3) & 0x1f);
+
+function from565(v) {
+  const r = (v >> 11) & 0x1f, g = (v >> 5) & 0x3f, b = v & 0x1f;
+  return [(r << 3) | (r >> 2), (g << 2) | (g >> 4), (b << 3) | (b >> 2)];
+}
+
+/** One 4x4 RGB block -> 8 bytes of DXT1, opaque 4-colour mode.
+ *  `blk` is 48 floats, row-major, 3 channels. */
+function dxt1Block(blk, out, o) {
+  let minR = Infinity, minG = Infinity, minB = Infinity;
+  let maxR = -Infinity, maxG = -Infinity, maxB = -Infinity;
+  for (let i = 0; i < 16; i++) {
+    const r = blk[i * 3], g = blk[i * 3 + 1], b = blk[i * 3 + 2];
+    if (r < minR) minR = r; if (r > maxR) maxR = r;
+    if (g < minG) minG = g; if (g > maxG) maxG = g;
+    if (b < minB) minB = b; if (b > maxB) maxB = b;
+  }
+  let c0 = to565(maxR, maxG, maxB);
+  let c1 = to565(minR, minG, minB);
+  if (c0 === c1) {
+    // Flat block: keep c0 > c1 so we stay in 4-colour (opaque) mode rather than
+    // falling into DXT1's 3-colour + transparent interpretation.
+    if (c1 === 0) c0 = 1; else c1 = c0 - 1;
+  }
+  if (c0 < c1) { const t = c0; c0 = c1; c1 = t; }
+  const e0 = from565(c0), e1 = from565(c1);
+  // fround: numpy builds this palette in float32, and the /3 is inexact. Matching the
+  // precision keeps argmin from tipping the other way on near-equidistant pixels.
+  const f = Math.fround;
+  const pal = [
+    e0,
+    e1,
+    [f(f(f(2 * e0[0]) + e1[0]) / 3), f(f(f(2 * e0[1]) + e1[1]) / 3), f(f(f(2 * e0[2]) + e1[2]) / 3)],
+    [f(f(e0[0] + f(2 * e1[0])) / 3), f(f(e0[1] + f(2 * e1[1])) / 3), f(f(e0[2] + f(2 * e1[2])) / 3)],
+  ];
+  // 16 pixels x 2 bits = exactly 32. `bits` goes negative once pixel 15 sets bit 31;
+  // that is harmless because every read below uses >>> (unsigned).
+  let bits = 0;
+  for (let i = 0; i < 16; i++) {
+    const r = blk[i * 3], g = blk[i * 3 + 1], b = blk[i * 3 + 2];
+    // Every step rounds to float32, matching numpy's dtype through the subtract, the
+    // square and the 3-element reduction. Doing this in float64 picks a different
+    // palette entry for pixels sitting near the midpoint of the two interpolated
+    // colours -- 90 bytes out of 699,188 on the reference image. Ties go to the first
+    // minimum, as np.argmin does.
+    let best = 0, bd = Infinity;
+    for (let p = 0; p < 4; p++) {
+      const dr = f(r - pal[p][0]), dg = f(g - pal[p][1]), db = f(b - pal[p][2]);
+      const d = f(f(f(dr * dr) + f(dg * dg)) + f(db * db));
+      if (d < bd) { bd = d; best = p; }
+    }
+    bits |= best << (2 * i);
+  }
+  out[o] = c0 & 0xff; out[o + 1] = (c0 >> 8) & 0xff;
+  out[o + 2] = c1 & 0xff; out[o + 3] = (c1 >> 8) & 0xff;
+  out[o + 4] = bits & 0xff; out[o + 5] = (bits >>> 8) & 0xff;
+  out[o + 6] = (bits >>> 16) & 0xff; out[o + 7] = (bits >>> 24) & 0xff;
+}
+
+/** Whole-image DXT1. `rgb` is Float32Array of w*h*3. Partial edge blocks are zero-padded,
+ *  matching the reference implementation. */
+function dxt1Compress(rgb, w, h) {
+  const bw = Math.ceil(w / 4), bh = Math.ceil(h / 4);
+  const out = new Uint8Array(bw * bh * 8);
+  const blk = new Float32Array(48);
+  let o = 0;
+  for (let by = 0; by < h; by += 4) {
+    for (let bx = 0; bx < w; bx += 4) {
+      blk.fill(0);
+      for (let y = 0; y < 4 && by + y < h; y++) {
+        for (let x = 0; x < 4 && bx + x < w; x++) {
+          const s = ((by + y) * w + (bx + x)) * 3;
+          const d = (y * 4 + x) * 3;
+          blk[d] = rgb[s]; blk[d + 1] = rgb[s + 1]; blk[d + 2] = rgb[s + 2];
+        }
+      }
+      dxt1Block(blk, out, o);
+      o += 8;
+    }
+  }
+  return out;
+}
+
+/** 2x2 box filter. Values stay exactly representable through the whole chain (a 1024
+ *  image's deepest mip needs 24 mantissa bits, exactly what float32 has), so this
+ *  matches numpy bit for bit. */
+function boxDown(rgb, w, h) {
+  const nw = w >> 1, nh = h >> 1;
+  const out = new Float32Array(nw * nh * 3);
+  for (let y = 0; y < nh; y++) {
+    for (let x = 0; x < nw; x++) {
+      for (let c = 0; c < 3; c++) {
+        const a = rgb[((2 * y) * w + 2 * x) * 3 + c];
+        const b = rgb[((2 * y + 1) * w + 2 * x) * 3 + c];
+        const d = rgb[((2 * y) * w + 2 * x + 1) * 3 + c];
+        const e = rgb[((2 * y + 1) * w + 2 * x + 1) * 3 + c];
+        out[(y * nw + x) * 3 + c] = Math.fround((a + b + d + e) * 0.25);
+      }
+    }
+  }
+  return out;
+}
+
+const mipCount = (w, h) => Math.max(1, (32 - Math.clz32(Math.min(w, h))) - 2);
+
+/** Total DXT1 byte length of the full mip chain -- the value the engine's resident path
+ *  expects BODY to be. */
+function mipChainSize(w, h) {
+  let total = 0, cw = w, ch = h;
+  for (let m = 0, n = mipCount(w, h); m < n; m++) {
+    total += Math.ceil(cw / 4) * Math.ceil(ch / 4) * 8;
+    cw >>= 1; ch >>= 1;
+  }
+  return total;
+}
+
+/**
+ * Build a complete UCFX texture container.
+ * @param {{width:number, height:number, rgb:Float32Array, name:string}} o
+ *        `rgb` is w*h*3 floats in 0..255.
+ * @returns {Uint8Array}
+ */
+function buildUcfxTexture({ width, height, rgb, name }) {
+  if (!isPow2(width) || !isPow2(height)) {
+    throw new Error(`texture must be power-of-two, got ${width}x${height}`);
+  }
+  const mips = mipCount(width, height);
+  const parts = [];
+  let cur = rgb, cw = width, ch = height;
+  for (let m = 0; m < mips; m++) {
+    parts.push(dxt1Compress(cur, cw, ch));
+    if (m < mips - 1) { cur = boxDown(cur, cw, ch); cw >>= 1; ch >>= 1; }
+  }
+  let bodyLen = 0;
+  for (const p of parts) bodyLen += p.length;
+  const body = new Uint8Array(bodyLen);
+  let bo = 0;
+  for (const p of parts) { body.set(p, bo); bo += p.length; }
+
+  // NAME is NUL-terminated and padded to an even length.
+  const nameBytes = new TextEncoder().encode(name);
+  let nameLen = nameBytes.length + 1;
+  if (nameLen % 2) nameLen++;
+  const nameB = new Uint8Array(nameLen);
+  nameB.set(nameBytes);
+
+  const info = new Uint8Array(34);
+  const iv = new DataView(info.buffer);
+  iv.setUint16(0, width, true); iv.setUint16(2, height, true);
+  iv.setUint16(4, 1, true); iv.setUint16(6, mips, true);
+  iv.setUint16(8, 0, true); iv.setUint16(10, 1, true); iv.setUint16(12, 1, true);
+  info.set(new TextEncoder().encode('DXT1'), 14);
+  iv.setUint32(22, body.length, true);
+  // info[26:32] stays zero = fully resident (no streaming)
+  iv.setUint16(32, 0xffff, true);
+
+  const rows = [['NAME', nameB, 2], ['INFO', info, 1], ['BODY', body, 0]];
+  const dataOff = 20 + 3 * 20;
+  const chunks = [];
+  const placed = [];
+  let blobLen = 0;
+  for (const [tag, buf, u2] of rows) {
+    while (blobLen % 4) { chunks.push(new Uint8Array(1)); blobLen++; }
+    placed.push([tag, blobLen, buf.length, u2]);
+    chunks.push(buf);
+    blobLen += buf.length;
+  }
+
+  const total = dataOff + blobLen + 8;
+  const out = new Uint8Array(total);
+  const dv = new DataView(out.buffer);
+  out.set(new TextEncoder().encode('UCFX'), 0);
+  dv.setUint32(4, dataOff, true); dv.setUint32(8, 0, true);
+  dv.setUint32(12, 0, true); dv.setUint32(16, 3, true);
+  let ro = 20;
+  for (const [tag, off, sz, u2] of placed) {
+    out.set(new TextEncoder().encode(tag), ro);
+    dv.setUint32(ro + 4, off, true); dv.setUint32(ro + 8, sz, true);
+    dv.setUint32(ro + 12, u2, true); dv.setUint32(ro + 16, 0, true);
+    ro += 20;
+  }
+  let co = dataOff;
+  for (const c of chunks) { out.set(c, co); co += c.length; }
+  out.set(new TextEncoder().encode('CSUM'), co);
+  dv.setUint32(co + 4, crc32Mercs2(out.subarray(0, co)), true);
+  return out;
+}
+
+const isPow2 = (n) => n > 0 && (n & (n - 1)) === 0;
+
+/** Read an uncompressed BGRA .dds (128-byte header) -> {width, height, rgb}.
+ *  Used by the tests to feed the exact pixels the reference script saw. */
+function readDdsRgb(buf) {
+  const dv = new DataView(buf);
+  const height = dv.getUint32(12, true);
+  const width = dv.getUint32(16, true);
+  const px = new Uint8Array(buf, 128);
+  const rgb = new Float32Array(width * height * 3);
+  for (let i = 0, n = width * height; i < n; i++) {
+    rgb[i * 3] = px[i * 4 + 2];       // stored BGRA
+    rgb[i * 3 + 1] = px[i * 4 + 1];
+    rgb[i * 3 + 2] = px[i * 4];
+  }
+  return { width, height, rgb };
+}
+
+
+// ===== src/export.js =====
+// Additive export: publish a NEW skin rather than overwrite an existing texture.
+//
+// Overwriting texture 0x8DE46BB7 changes it for EVERY model that references it -- and
+// textures are shared across LOD rungs and, at 36,724 textures game-wide, very likely
+// across characters too. So the flow here mints new assets and leaves the originals alone:
+//
+//   1. a NEW texture asset, named by the user, hashed with pandemic_hash_m2
+//   2. a NEW model asset cloned from the donor's ORIGINAL block bytes (bundle raw/),
+//      with its material texture references repointed at (1) via inject_parts --repoint
+//
+// The original character is untouched and the new one is selectable by name in Lua.
+
+/** pandemic_hash_m2 -- FNV-1a 32-bit, case-folded with `| 0x20`, finalised `^ 0x2A` then
+ *  one more multiply by the FNV prime. Verified against all 80 named bones of the human
+ *  skeleton. Case-insensitive, so "MySkin" and "myskin" collide by design. */
+function pandemicHashM2(text) {
+  if (!text.length) return 0;
+  let h = 0x811c9dc5 >>> 0;
+  for (let i = 0; i < text.length; i++) {
+    h = (h ^ (text.charCodeAt(i) | 0x20)) >>> 0;
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  h = (h ^ 0x2a) >>> 0;
+  return Math.imul(h, 0x01000193) >>> 0;
+}
+
+const hex8 = (n) => '0x' + (n >>> 0).toString(16).toUpperCase().padStart(8, '0');
+
+/** Asset names are hashed case-insensitively and land in a flat namespace, so keep them
+ *  distinctive and lowercase. */
+function sanitizeAssetName(s) {
+  return (String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'skin').slice(0, 48);
+}
+
+/**
+ * Work out what to emit for one edited texture.
+ * @param {{bundle, texture, skinName, replacedBy}} o
+ */
+function planExport({ bundle, texture, skinName }) {
+  const modelName = sanitizeAssetName(skinName);
+  const texName = `${modelName}_${(texture.roles[0] || 'tex')}`;
+  const texHash = pandemicHashM2(texName);
+  const modelHash = pandemicHashM2(modelName);
+
+  // Which other draw groups share this exact texture? Repointing only the edited one
+  // leaves the rest of the model on the original sheet, which is usually a surprise.
+  const sharing = bundle.textures.filter((t) => t.hash === texture.hash);
+  const alsoUsedBy = bundle.prims.filter((p) => {
+    const e = p.material.extras || {};
+    return e.diffuse === texture.hash || e.normal === texture.hash || e.specular === texture.hash;
+  }).map((p) => p.name);
+
+  const rawFiles = Object.keys(bundle.manifest.lod_chain || {}).length
+    ? []
+    : (bundle.manifest.lod_chain || []).map((l) => `block${l.block}`);
+
+  return {
+    modelName, modelHash, texName, texHash,
+    textureFile: `${texName}.ucfx`,
+    alsoUsedBy,
+    sharedWarning: alsoUsedBy.length > 1
+      ? `Texture ${texture.hash} is referenced by ${alsoUsedBy.length} draw groups ` +
+        `(${alsoUsedBy.slice(0, 3).join(', ')}${alsoUsedBy.length > 3 ? ' …' : ''}). ` +
+        `Repointing swaps it for all of them on the new model — usually what you want, ` +
+        `but check the preview.`
+      : null,
+    rawFiles,
+  };
+}
+
+/** The command block for the additive path. */
+function buildCommands({ bundle, texture, plan }) {
+  const lod = (bundle.manifest.lod_chain || [])[0];
+  const rawName = lod ? `block${lod.block}_P000.ucfx` : 'block<N>_P000.ucfx';
+  return [
+    `# ADDITIVE reskin of "${bundle.name}" — the original model and texture are untouched.`,
+    `#`,
+    `# new texture asset : ${plan.texName}  ${hex8(plan.texHash)}`,
+    `# new model  asset : ${plan.modelName}  ${hex8(plan.modelHash)}`,
+    `# repoint          : ${texture.hash} -> ${hex8(plan.texHash)}`,
+    ``,
+    `# 1. clone the donor's ORIGINAL block bytes into a new-hash model whose materials`,
+    `#    point at your texture instead. raw/ came with the export bundle.`,
+    `inject_parts raw/${rawName} ${plan.modelName}.ucfx \\`,
+    `    --name-hash ${hex8(plan.modelHash)} \\`,
+    `    --repoint ${texture.hash}:${hex8(plan.texHash)}`,
+    ``,
+    `# 2. put BOTH new assets into a patch WAD (texture type_id 27, model type_id 19)`,
+    `mercs2_smuggler --inject-extra ${hex8(plan.texHash)}:27:${plan.textureFile} \\`,
+    `                --inject-extra ${hex8(plan.modelHash)}:19:${plan.modelName}.ucfx \\`,
+    `                --out ${plan.modelName}-patch.wad`,
+    ``,
+    `# 3. merge into the live patch — the engine mounts exactly ONE <name>-patch.wad`,
+    `merge_patches "<game>/data/vz-patch.wad" ${plan.modelName}-patch.wad out.wad --replace`,
+    `cp out.wad "<game>/data/vz-patch.wad"`,
+    ``,
+    `# 4. wear it in-game`,
+    `#    Player.SetOutfit(Player.GetLocalCharacter(), "${plan.modelName}")`,
+  ].join('\n');
+}
+
+/** Checks that stop a texture the engine will reject or mis-stream. */
+function preflight({ width, height, texture, name }) {
+  const out = [];
+  const pow2 = (n) => n > 0 && (n & (n - 1)) === 0;
+  out.push({
+    id: 'pow2', title: 'Power-of-two size', ok: pow2(width) && pow2(height),
+    text: `${width}x${height}`,
+    detail: 'DXT block compression and the mip chain both require power-of-two dimensions.',
+  });
+  const same = texture ? width === texture.width && height === texture.height : true;
+  out.push({
+    id: 'dims', title: 'Matches the original', ok: same,
+    text: texture ? `${width}x${height} vs original ${texture.width}x${texture.height}` : `${width}x${height}`,
+    detail: 'A different size still works, but the texture pool has a 5120-cell cap — ' +
+      'upscaling a 256 sheet to 1024 costs 16x the budget for no visible gain at ' +
+      'gameplay distance.',
+  });
+  out.push({
+    id: 'name', title: 'Asset name', ok: !!sanitizeAssetName(name) && sanitizeAssetName(name) !== 'skin',
+    text: sanitizeAssetName(name) || '(empty)',
+    detail: 'Names are hashed case-insensitively into a flat namespace. Pick something ' +
+      'distinctive — a collision silently replaces an existing asset.',
+  });
+  out.push({
+    id: 'budget', title: 'Texture memory', ok: width * height <= 1024 * 1024,
+    text: `${((width * height) / 1024 / 1024).toFixed(2)} Mpx`,
+    detail: 'Above 1024x1024 you are eating a disproportionate share of the texture pool.',
+  });
+  return out;
+}
+
+
+// ===== src/preview.js =====
+// Textured 3D preview. Raw WebGL, no three.js -- the tool has to stay one self-contained
+// file with no network access, and this needs exactly one shader.
+//
+// The point of the preview is to answer "does my paint land where I think it does", so it
+// shows the edited texture on the real geometry with flat-ish lighting: strong shading
+// would hide exactly the seam and stretch problems the user is looking for.
+
+const VS = `
+attribute vec3 aPos; attribute vec2 aUV; attribute vec3 aNrm;
+uniform mat4 uMVP; uniform mat4 uModel;
+varying vec2 vUV; varying vec3 vNrm;
+void main() {
+  vUV = aUV;
+  vNrm = mat3(uModel) * aNrm;
+  gl_Position = uMVP * vec4(aPos, 1.0);
+}`;
+
+const FS = `
+precision mediump float;
+varying vec2 vUV; varying vec3 vNrm;
+uniform sampler2D uTex;
+uniform float uLit;
+void main() {
+  vec4 t = texture2D(uTex, vUV);
+  // Deliberately shallow lighting: 0.75 ambient + 0.25 wrap diffuse keeps the texture
+  // readable everywhere instead of burying half the model in shadow.
+  float d = max(dot(normalize(vNrm), normalize(vec3(0.4, 0.8, 0.6))), 0.0);
+  float l = mix(1.0, 0.75 + 0.25 * d, uLit);
+  gl_FragColor = vec4(t.rgb * l, 1.0);
+}`;
+
+const perspective = (fovy, aspect, n, f) => {
+  const t = 1 / Math.tan(fovy / 2);
+  return [t / aspect, 0, 0, 0, 0, t, 0, 0, 0, 0, (f + n) / (n - f), -1, 0, 0, (2 * f * n) / (n - f), 0];
+};
+
+function lookAt(eye, ctr, up) {
+  const z = norm3(sub3(eye, ctr));
+  const x = norm3(cross3(up, z));
+  const y = cross3(z, x);
+  return [x[0], y[0], z[0], 0, x[1], y[1], z[1], 0, x[2], y[2], z[2], 0,
+          -dot3(x, eye), -dot3(y, eye), -dot3(z, eye), 1];
+}
+const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const norm3 = (a) => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+function mul4(a, b) {
+  const o = new Array(16);
+  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
+    let s = 0;
+    for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k];
+    o[c * 4 + r] = s;
+  }
+  return o;
+}
+const rotY = (t) => [Math.cos(t), 0, -Math.sin(t), 0, 0, 1, 0, 0, Math.sin(t), 0, Math.cos(t), 0, 0, 0, 0, 1];
+const rotX = (t) => [1, 0, 0, 0, 0, Math.cos(t), Math.sin(t), 0, 0, -Math.sin(t), Math.cos(t), 0, 0, 0, 0, 1];
+
+class Preview {
+  constructor(canvas) {
+    this.cv = canvas;
+    this.gl = canvas.getContext('webgl', { antialias: true, alpha: true });
+    this.ok = !!this.gl;
+    this.yaw = 0.6; this.pitch = 0.1; this.dist = 3; this.lit = 1;
+    if (!this.ok) return;
+    const gl = this.gl;
+    this.prog = link(gl, VS, FS);
+    this.loc = {
+      aPos: gl.getAttribLocation(this.prog, 'aPos'),
+      aUV: gl.getAttribLocation(this.prog, 'aUV'),
+      aNrm: gl.getAttribLocation(this.prog, 'aNrm'),
+      uMVP: gl.getUniformLocation(this.prog, 'uMVP'),
+      uModel: gl.getUniformLocation(this.prog, 'uModel'),
+      uTex: gl.getUniformLocation(this.prog, 'uTex'),
+      uLit: gl.getUniformLocation(this.prog, 'uLit'),
+    };
+    this.buf = { pos: gl.createBuffer(), uv: gl.createBuffer(), nrm: gl.createBuffer(), idx: gl.createBuffer() };
+    this.tex = gl.createTexture();
+    this.count = 0;
+
+    let drag = null;
+    canvas.addEventListener('pointerdown', (e) => { drag = { x: e.offsetX, y: e.offsetY, yaw: this.yaw, pitch: this.pitch }; canvas.setPointerCapture(e.pointerId); });
+    canvas.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      this.yaw = drag.yaw + (e.offsetX - drag.x) * 0.01;
+      this.pitch = Math.max(-1.4, Math.min(1.4, drag.pitch + (e.offsetY - drag.y) * 0.01));
+      this.draw();
+    });
+    canvas.addEventListener('pointerup', () => { drag = null; });
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      this.dist = Math.max(0.4, Math.min(20, this.dist * (1 + Math.sign(e.deltaY) * 0.12)));
+      this.draw();
+    }, { passive: false });
+  }
+
+  setGeometry(geo) {
+    if (!this.ok || !geo) { this.count = 0; return; }
+    const gl = this.gl;
+    // Index range decides whether we need the 32-bit index extension; most single-texture
+    // groups fit in 16 bits, so only reach for it when the model actually demands it.
+    const need32 = geo.index.length && geo.position.length / 3 > 65535;
+    this.ext32 = need32 ? gl.getExtension('OES_element_index_uint') : null;
+    if (need32 && !this.ext32) { this.count = 0; this.error = 'model needs 32-bit indices, unsupported here'; return; }
+    this.idxType = need32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
+    const idx = need32 ? geo.index : new Uint16Array(geo.index);
+
+    bind(gl, this.buf.pos, geo.position);
+    bind(gl, this.buf.uv, geo.uv);
+    bind(gl, this.buf.nrm, geo.normal);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buf.idx);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+    this.count = idx.length;
+
+    // Frame the geometry so it fills the view regardless of model scale.
+    let mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9];
+    for (let i = 0; i < geo.position.length; i += 3) {
+      for (let c = 0; c < 3; c++) {
+        mn[c] = Math.min(mn[c], geo.position[i + c]);
+        mx[c] = Math.max(mx[c], geo.position[i + c]);
+      }
+    }
+    this.center = [(mn[0] + mx[0]) / 2, (mn[1] + mx[1]) / 2, (mn[2] + mx[2]) / 2];
+    this.radius = Math.max(1e-3, Math.hypot(mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]) / 2);
+    this.dist = 2.6;
+    this.draw();
+  }
+
+  /** @param {ImageData|HTMLCanvasElement|HTMLImageElement} img */
+  setTexture(img) {
+    if (!this.ok) return;
+    const gl = this.gl;
+    gl.bindTexture(gl.TEXTURE_2D, this.tex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    if (img instanceof ImageData) {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, img.width, img.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(img.data.buffer));
+    } else {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+    }
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    this.draw();
+  }
+
+  draw() {
+    if (!this.ok) return;
+    const gl = this.gl;
+    const dpr = window.devicePixelRatio || 1;
+    const w = this.cv.clientWidth, h = this.cv.clientHeight;
+    if (this.cv.width !== w * dpr) { this.cv.width = w * dpr; this.cv.height = h * dpr; }
+    gl.viewport(0, 0, this.cv.width, this.cv.height);
+    gl.clearColor(0, 0, 0, 0);
+    gl.enable(gl.DEPTH_TEST);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    if (!this.count) return;
+
+    const r = this.radius || 1;
+    const model = mul4(rotX(this.pitch), rotY(this.yaw));
+    const view = lookAt([0, 0, this.dist * r * 2], [0, 0, 0], [0, 1, 0]);
+    const proj = perspective(0.9, (w || 1) / (h || 1), r * 0.05, r * 40);
+    // centre the model at the origin before rotating, so orbit does not swing it away
+    const t = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -this.center[0], -this.center[1], -this.center[2], 1];
+    const mv = mul4(model, t);
+    const mvp = mul4(proj, mul4(view, mv));
+
+    gl.useProgram(this.prog);
+    gl.uniformMatrix4fv(this.loc.uMVP, false, new Float32Array(mvp));
+    gl.uniformMatrix4fv(this.loc.uModel, false, new Float32Array(mv));
+    gl.uniform1f(this.loc.uLit, this.lit);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.tex);
+    gl.uniform1i(this.loc.uTex, 0);
+    attrib(gl, this.buf.pos, this.loc.aPos, 3);
+    attrib(gl, this.buf.uv, this.loc.aUV, 2);
+    attrib(gl, this.buf.nrm, this.loc.aNrm, 3);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buf.idx);
+    gl.drawElements(gl.TRIANGLES, this.count, this.idxType, 0);
+  }
+}
+
+function bind(gl, b, data) {
+  gl.bindBuffer(gl.ARRAY_BUFFER, b);
+  gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+}
+function attrib(gl, b, loc, n) {
+  if (loc < 0) return;
+  gl.bindBuffer(gl.ARRAY_BUFFER, b);
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, n, gl.FLOAT, false, 0, 0);
+}
+function link(gl, vs, fs) {
+  const c = (type, src) => {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error('shader: ' + gl.getShaderInfoLog(s));
+    return s;
+  };
+  const p = gl.createProgram();
+  gl.attachShader(p, c(gl.VERTEX_SHADER, vs));
+  gl.attachShader(p, c(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error('link: ' + gl.getProgramInfoLog(p));
+  return p;
+}
+
+
+// ===== src/ui/app.js =====
+// mercs2-skinner UI.
+//
+// Flow: drop an export bundle -> pick a texture -> see it with its UV layout drawn on top
+// -> replace or paint over it -> check the preview -> export a NEW asset pair.
+
+
+const $ = (s) => document.querySelector(s);
+const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x !== undefined) e.textContent = x; return e; };
+
+const S = {
+  bundle: null,
+  files: null,
+  textures: new Map(),   // hash -> {original: ImageData, edited: ImageData|null, name}
+  selected: null,
+  showUV: true,
+  skinName: '',
+};
+let preview;
+
+export async function boot() {
+  preview = new Preview($('#preview'));
+  if (!preview.ok) $('#preview-note').textContent = 'WebGL unavailable — the 3D preview is disabled.';
+
+  const input = $('#bundle-input');
+  input.addEventListener('change', (e) => load([...e.target.files]).catch(fail));
+  $('#drop').addEventListener('dragover', (e) => { e.preventDefault(); $('#drop').classList.add('over'); });
+  $('#drop').addEventListener('dragleave', () => $('#drop').classList.remove('over'));
+  $('#drop').addEventListener('drop', async (e) => {
+    e.preventDefault(); $('#drop').classList.remove('over');
+    const files = await filesFromDrop(e.dataTransfer);
+    load(files).catch(fail);
+  });
+  $('#show-uv').addEventListener('change', (e) => { S.showUV = e.target.checked; drawTexture(); });
+  $('#replace-input').addEventListener('change', (e) => replaceTexture(e.target.files[0]).catch(fail));
+  $('#skin-name').addEventListener('input', (e) => { S.skinName = e.target.value; renderExport(); });
+  $('#btn-revert').addEventListener('click', () => {
+    const t = S.textures.get(S.selected);
+    if (t) { t.edited = null; drawTexture(); pushToPreview(); renderExport(); renderList(); }
+  });
+  $('#btn-ucfx').addEventListener('click', exportUcfx);
+  $('#btn-png').addEventListener('click', exportPng);
+  window.addEventListener('resize', () => preview.draw());
+  status('Drop an export-bundle folder to begin.');
+}
+
+/** Directory drops arrive as entries, not files. */
+async function filesFromDrop(dt) {
+  const out = [];
+  const walk = async (entry, path) => {
+    if (entry.isFile) {
+      const f = await new Promise((res, rej) => entry.file(res, rej));
+      Object.defineProperty(f, 'webkitRelativePath', { value: path + f.name, configurable: true });
+      out.push(f);
+    } else if (entry.isDirectory) {
+      const rd = entry.createReader();
+      for (;;) {
+        const batch = await new Promise((res, rej) => rd.readEntries(res, rej));
+        if (!batch.length) break;
+        for (const e of batch) await walk(e, path + entry.name + '/');
+      }
+    }
+  };
+  const roots = [...dt.items].map((i) => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+  if (roots.length) { for (const r of roots) await walk(r, ''); return out; }
+  return [...dt.files];
+}
+
+async function load(files) {
+  status('reading bundle…');
+  const sorted = sortBundleFiles(files);
+  if (!sorted.manifest || !sorted.gltf || !sorted.bin) {
+    throw new Error('That is not a complete export bundle.\n' + MISSING_HINT +
+      `\n\nFound: ${sorted.manifest ? 'manifest.json ' : ''}${sorted.gltf ? 'model.gltf ' : ''}` +
+      `${sorted.bin ? 'model.bin ' : ''}${sorted.textures.size} texture(s).`);
+  }
+  const manifest = JSON.parse(await sorted.manifest.text());
+  const gltf = JSON.parse(await sorted.gltf.text());
+  const bin = await sorted.bin.arrayBuffer();
+  S.bundle = readBundle({ manifest, gltf, bin });
+  S.files = sorted;
+  S.textures.clear();
+
+  for (const tex of S.bundle.textures) {
+    const base = (tex.file || '').split('/').pop().toLowerCase();
+    const f = sorted.textures.get(base);
+    if (!f) continue;
+    const img = await createImageBitmap(f);
+    const cv = document.createElement('canvas');
+    cv.width = img.width; cv.height = img.height;
+    cv.getContext('2d').drawImage(img, 0, 0);
+    S.textures.set(tex.hash, {
+      original: cv.getContext('2d').getImageData(0, 0, img.width, img.height),
+      edited: null, width: img.width, height: img.height,
+    });
+  }
+  S.skinName = sanitizeAssetName(S.bundle.name + '_custom');
+  $('#skin-name').value = S.skinName;
+  $('#bundle-name').textContent =
+    `${S.bundle.name} — ${S.bundle.textures.length} textures, ${S.bundle.prims.length} draw groups` +
+    (S.bundle.skinned ? ', skinned' : '');
+  $('#step-edit').hidden = false;
+  $('#step-export').hidden = false;
+  select(S.bundle.textures[0]?.hash);
+  renderList();
+  status('');
+}
+
+function renderList() {
+  const wrap = $('#tex-list');
+  wrap.innerHTML = '';
+  for (const t of S.bundle.textures) {
+    const rec = S.textures.get(t.hash);
+    const row = el('button', 'tex-row' + (t.hash === S.selected ? ' sel' : ''));
+    row.appendChild(el('span', 'role ' + (t.roles[0] || 'other'), t.roles.join('+') || 'unused'));
+    row.appendChild(el('span', 'thash', t.hash));
+    row.appendChild(el('span', 'tdim', `${t.width}×${t.height}`));
+    row.appendChild(el('span', 'ttri', t.triangles ? `${t.triangles} tris` : '—'));
+    if (rec && rec.edited) row.appendChild(el('span', 'badge edited', 'edited'));
+    if (!rec) row.appendChild(el('span', 'badge missing', 'no png'));
+    row.addEventListener('click', () => { select(t.hash); renderList(); });
+    wrap.appendChild(row);
+  }
+}
+
+function select(hash) {
+  if (!hash) return;
+  S.selected = hash;
+  const t = S.bundle.textures.find((x) => x.hash === hash);
+  const rec = S.textures.get(hash);
+  $('#tex-title').textContent = `${hash} · ${t.roles.join('+') || 'unused'} · ${t.width}×${t.height}`;
+  $('#tex-sub').textContent = t.triangles
+    ? `${t.triangles} triangles across ${t.primitives.length} draw group(s), finest LOD ${t.bestLod}`
+    : 'not referenced by any draw group in this bundle';
+  $('#btn-revert').disabled = !(rec && rec.edited);
+  drawTexture();
+  pushToPreview();
+  renderExport();
+}
+
+function currentImage() {
+  const rec = S.textures.get(S.selected);
+  return rec ? (rec.edited || rec.original) : null;
+}
+
+function drawTexture() {
+  const cv = $('#tex-canvas');
+  const img = currentImage();
+  if (!img) { cv.width = cv.height = 1; return; }
+  cv.width = img.width; cv.height = img.height;
+  const ctx = cv.getContext('2d');
+  ctx.putImageData(img, 0, 0);
+  if (!S.showUV) return;
+  // UV wireframe. Without this a texture sheet is unpaintable -- you cannot tell a
+  // sleeve from a jaw.
+  const tris = S.bundle.uvTriangles(S.selected);
+  ctx.save();
+  ctx.lineWidth = Math.max(0.5, img.width / 1024);
+  ctx.strokeStyle = 'rgba(255,64,160,0.85)';
+  ctx.beginPath();
+  for (const [u1, v1, u2, v2, u3, v3] of tris) {
+    const x1 = u1 * img.width, y1 = v1 * img.height;
+    const x2 = u2 * img.width, y2 = v2 * img.height;
+    const x3 = u3 * img.width, y3 = v3 * img.height;
+    ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.lineTo(x3, y3); ctx.closePath();
+  }
+  ctx.stroke();
+  ctx.restore();
+  $('#uv-count').textContent = `${tris.length} UV triangles`;
+}
+
+function pushToPreview() {
+  if (!preview.ok || !S.bundle) return;
+  const geo = S.bundle.geometryFor(S.selected);
+  preview.setGeometry(geo);
+  const img = currentImage();
+  if (img) preview.setTexture(img);
+  $('#preview-note').textContent = geo
+    ? 'drag to orbit · scroll to zoom'
+    : 'this texture is not on any drawing group, nothing to preview';
+}
+
+async function replaceTexture(file) {
+  if (!file || !S.selected) return;
+  const img = await createImageBitmap(file);
+  const rec = S.textures.get(S.selected);
+  const cv = document.createElement('canvas');
+  // Keep the ORIGINAL sheet size by default: the texture pool has a hard cell cap and
+  // upscaling costs budget for no visible gain.
+  cv.width = rec.width; cv.height = rec.height;
+  const ctx = cv.getContext('2d');
+  ctx.drawImage(img, 0, 0, rec.width, rec.height);
+  rec.edited = ctx.getImageData(0, 0, rec.width, rec.height);
+  if (img.width !== rec.width || img.height !== rec.height) {
+    note(`Resized ${img.width}×${img.height} → ${rec.width}×${rec.height} to match the original sheet.`);
+  } else note('');
+  drawTexture(); pushToPreview(); renderExport(); renderList();
+  $('#btn-revert').disabled = false;
+}
+
+function renderExport() {
+  if (!S.bundle || !S.selected) return;
+  const tex = S.bundle.textures.find((t) => t.hash === S.selected);
+  const rec = S.textures.get(S.selected);
+  if (!tex || !rec) return;
+  const plan = planExport({ bundle: S.bundle, texture: tex, skinName: S.skinName });
+  S.plan = plan;
+
+  const checks = preflight({ width: rec.width, height: rec.height, texture: tex, name: S.skinName });
+  const cw = $('#checks');
+  cw.innerHTML = '';
+  for (const c of checks) {
+    const chip = el('span', `chip ${c.ok ? 'ok' : 'bad'}`, `${c.title}: ${c.text}`);
+    chip.title = c.detail;
+    cw.appendChild(chip);
+  }
+  $('#hashes').textContent =
+    `texture "${plan.texName}" ${hex8(plan.texHash)}   ·   model "${plan.modelName}" ${hex8(plan.modelHash)}`;
+  $('#shared-warn').hidden = !plan.sharedWarning;
+  $('#shared-warn').textContent = plan.sharedWarning || '';
+  $('#cmd').textContent = buildCommands({ bundle: S.bundle, texture: tex, plan });
+  $('#btn-ucfx').disabled = !rec.edited;
+  $('#export-hint').textContent = rec.edited ? '' : 'Replace the texture first — nothing to export yet.';
+}
+
+function exportUcfx() {
+  const rec = S.textures.get(S.selected);
+  const img = rec.edited || rec.original;
+  if (!isPow2(img.width) || !isPow2(img.height)) {
+    return fail(new Error(`Texture must be power-of-two; this is ${img.width}×${img.height}.`));
+  }
+  status('encoding DXT1…');
+  setTimeout(() => {
+    try {
+      const rgb = new Float32Array(img.width * img.height * 3);
+      for (let i = 0, n = img.width * img.height; i < n; i++) {
+        rgb[i * 3] = img.data[i * 4];
+        rgb[i * 3 + 1] = img.data[i * 4 + 1];
+        rgb[i * 3 + 2] = img.data[i * 4 + 2];
+      }
+      const bytes = buildUcfxTexture({ width: img.width, height: img.height, rgb, name: S.plan.texName });
+      download(S.plan.textureFile, bytes);
+      status('');
+    } catch (e) { fail(e); }
+  }, 16);
+}
+
+/** Export the sheet exactly as displayed -- including the UV wireframe when it is on,
+ *  because that overlay IS the template people want to open in an image editor. */
+function exportPng() {
+  $('#tex-canvas').toBlob((b) => {
+    const a = el('a');
+    a.href = URL.createObjectURL(b);
+    a.download = `${S.selected}${S.showUV ? '_uv_template' : ''}.png`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+}
+
+function download(name, bytes) {
+  const a = el('a');
+  a.href = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }));
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+const status = (m) => { $('#status').textContent = m; $('#status').hidden = !m; $('#error').hidden = true; };
+const note = (m) => { $('#note').textContent = m; $('#note').hidden = !m; };
+function fail(e) {
+  console.error(e);
+  $('#status').hidden = true;
+  $('#error').hidden = false;
+  $('#error').textContent = e.message || String(e);
+}
+
+
+boot().catch((e) => {
+  document.getElementById('error').hidden = false;
+  document.getElementById('error').textContent = e.message || String(e);
+});
+</script>
+</body>
+</html>

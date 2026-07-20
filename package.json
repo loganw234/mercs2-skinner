@@ -1,0 +1,8 @@
+{
+  "name": "mercs2-skinner",
+  "version": "0.1.0",
+  "description": "Paint new skins for existing Mercenaries 2 models, in the browser, as NEW assets rather than overrides.",
+  "type": "module",
+  "private": true,
+  "scripts": { "test": "node test/run.js", "build": "node tools/bundle.js" }
+}

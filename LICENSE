@@ -1,0 +1,38 @@
+MIT License
+
+Copyright (c) 2026 Logan W
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+The MIT terms above cover the SOURCE CODE of this repository only.
+
+  * tools/reference-python/
+        The community project's `mercs2-mesh-pipeline-scripts.zip`, vendored UNMODIFIED
+        from Mercenaries-Fan-Build/mercs2-wad-simulator so the byte-parity test has a
+        specification to check against. Not this project's work; see that project for its
+        terms.
+
+  * src/texture.js
+        A JavaScript port of that project's dds_to_ucfx_texture.py. The Mercenaries 2
+        container layout it implements was reverse-engineered there.
+
+No compiled community code or game asset is redistributed in this repository.
+Not affiliated with or endorsed by EA or Pandemic Studios.

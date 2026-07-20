@@ -1,0 +1,14 @@
+node_modules/
+*.log
+
+# Extracted game assets and anything derived from them: NOT committed.
+# The tests that use these skip with a regeneration hint. Byte-parity still runs on a
+# fresh clone via the SYNTHETIC fixture (tools/make_synthetic_fixture.py), which contains
+# no game art.
+test/livebundle/
+test/fixtures/bundle_manifest.json
+test/fixtures/bundle_model.gltf
+test/fixtures/bundle_model.bin
+test/fixtures/tex_*.png
+test/fixtures/ref.dds
+test/fixtures/ref_container.expected.bin
