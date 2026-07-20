@@ -138,9 +138,21 @@ Of the **85 characters with a model of their own, 38 are single-block** and clon
 detail. The picker lists those first and marks them ✓; the other 47 are still offered, with
 what cloning costs them spelled out. Full detail in [docs/LOD-CHAIN.md](docs/LOD-CHAIN.md).
 
-A further **67 characters exist only as shared sub-entries** with no model row of their own.
-They can never be cloned, but they can be **reskinned in place**, which never clones anything
-and so is always geometrically correct. 152 characters in total.
+Every character the tool offers can be **reskinned in place** instead, which never clones
+anything and so is always geometrically correct.
+
+A further **67 names exist only as texture sets** — recovered from texture names, belonging
+to characters assembled from shared sub-entries. None of them has a model row, so the
+exporter cannot produce a bundle for any of them:
+
+```
+[FAIL] ch_hum_officer (0xD2A9DF48): no model ASET for 0xD2A9DF48
+```
+
+They are therefore unusable here by any route — not as a body, not as a reskin target, not
+as an outfit donor — and no picker offers them. The catalogue keeps them under
+`textureOnly` purely to record that the texture sets exist, and `bake_donors.py` asserts the
+split against the model table so the two can never drift.
 
 ## How many skins can you actually have
 
@@ -222,6 +234,5 @@ Not affiliated with or endorsed by EA or Pandemic Studios.
 - **The swap copies colour, not geometry.** Clothing that stands off the body — a helmet,
   a backpack, loose webbing — exists as *shape* on the donor, and shape is not what moves.
   You get its colours projected onto whatever the target has in that space.
-- **Some characters cannot be exported at all** — they exist only as shared sub-entries with
-  no model row of their own, so there is nothing to pull out. `pmc_hum_jennifer` is the
-  well-known case.
+- **67 texture sets cannot be reached at all** — no model row, so nothing to export. See
+  above; the pickers exclude them.

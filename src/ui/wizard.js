@@ -13,14 +13,22 @@ let onPick = () => {};
 export function setCatalogue(c) { CAT = c; }
 export function onDonorPicked(fn) { onPick = fn; }
 
-/** Everything selectable, clone donors first because they are the ones that can host
- *  variants without consuming anybody's identity. */
+/**
+ * Everything the tool can actually load.
+ *
+ * ★ ONLY characters with a model ASET row. The catalogue also carries `textureOnly` --
+ * names recovered from TEXTURE names that have no model of their own -- and none of those
+ * can be exported, so none can enter this tool by any route:
+ *
+ *     [FAIL] ch_hum_officer (0xD2A9DF48): no model ASET for 0xD2A9DF48
+ *
+ * An earlier build offered all 67 of them as outfit donors. Every one was a dead end, and
+ * the failure only shows up at the command line, long after the choice was made. If a
+ * picker ever needs widening, widen it here and nowhere else.
+ */
 export function allCharacters() {
   if (!CAT) return [];
-  return [
-    ...CAT.donors.map((d) => ({ ...d, kind: 'clone' })),
-    ...CAT.reskin.map((d) => ({ ...d, kind: 'reskin', blocks: null })),
-  ];
+  return CAT.donors.map((d) => ({ ...d, kind: 'clone' }));
 }
 
 export function buildWizard(root) {
@@ -52,9 +60,9 @@ export function buildWizard(root) {
     const g = root.dataset.goal;
     for (const b of goal.querySelectorAll('.wz-opt')) b.classList.toggle('sel', b.dataset.goal === g);
     if (!g) { rest.innerHTML = ''; return; }
-    // Both "add outfits" and "wear someone else's" put the result on a character's own
-    // model, so both need a character that HAS one.
-    const list = g === 'replace' ? chars : chars.filter((c) => c.kind === 'clone');
+    // Every goal needs a character the workshop can export, and allCharacters() already
+    // guarantees that, so all three goals see the same list.
+    const list = chars;
 
     rest.innerHTML = '';
     rest.appendChild(el('div', 'wz-q',
@@ -73,9 +81,7 @@ export function buildWizard(root) {
         `${list.length} characters have a model of their own and can host new outfits. `
         + `${safe} of them are single-block, meaning a clone keeps full detail at every `
         + 'distance — those are listed first and marked ✓. The rest are two-block: cloning '
-        + 'one works, but it loses its finer geometry and the face visibly flattens. The '
-        + 'remainder of the roster is stored as shared sub-entries and can be reskinned in '
-        + 'place but never duplicated.'));
+        + 'one works, but it loses its finer geometry and the face visibly flattens.'));
     }
 
     // Whether a ready-made template exists is the single most useful thing to know before
@@ -211,16 +217,17 @@ function renderDetail(root, c, goal) {
   // what the tool does -- it only fills the command in -- but that is the whole friction.
   let donorSel = null;
   if (goal === 'swap') {
-    // A donor is only useful if it owns body sheets. Characters that cannot be CLONED are
-    // perfectly good donors, since only their artwork is borrowed, so the wardrobe is much
-    // larger than the list of bodies.
-    const wardrobe = allCharacters().filter(
-      (x) => x.name !== c.name && (x.sheets || []).some((s) => s.part === 'ub' || s.part === 'lb'));
+    // Any exportable character is a valid donor. "Owns its own sheets" is NOT the test:
+    // a character whose sheets are named after somebody else still exports a full bundle
+    // with textures -- ch_hum_starter02 is catalogued as owning nothing and ships 18 of
+    // them -- and the outfit you copy is simply the one it wears in game. Being clonable
+    // is not the test either, since only the donor's artwork and mesh are read.
+    const wardrobe = allCharacters().filter((x) => x.name !== c.name);
     root.appendChild(el('div', 'wz-q', 'Whose clothes?'));
     root.appendChild(el('div', 'wz-note',
-      `${wardrobe.length} characters own body textures and can lend them. Characters that `
-      + 'cannot be cloned are still fine here — you are borrowing their artwork, not their '
-      + 'model.'));
+      `Any of these ${wardrobe.length} can lend an outfit — being clonable does not matter, `
+      + 'because only their artwork and body shape are read. Characters marked "wears '
+      + 'another character\'s textures" work too; you get the outfit they are seen in.'));
     donorSel = el('select');
     donorSel.id = 'wz-donor';
     const byF = {};
@@ -234,9 +241,10 @@ function renderDetail(root, c, goal) {
       const og = document.createElement('optgroup');
       og.label = f;
       for (const x of byF[f].sort((a, b) => a.name.localeCompare(b.name))) {
-        const parts = x.sheets.filter((s) => s.part === 'ub' || s.part === 'lb')
+        const own = x.sheets.filter((s) => s.part === 'ub' || s.part === 'lb')
           .map((s) => s.part).join(', ');
-        const o = el('option', null, `${x.name}   (${parts})`);
+        const o = el('option', null,
+          `${x.name}   ${own ? `(own ${own})` : "(wears another character's textures)"}`);
         o.value = x.name;
         og.appendChild(o);
       }
@@ -312,9 +320,11 @@ function renderDetail(root, c, goal) {
   const ul = el('ul');
   for (const [q, a] of [
     ['"no model ASET for 0x…"',
-      'That character has no model entry of its own, so it cannot be exported or cloned. '
-      + 'pmc_hum_jennifer is the well-known example. Pick another, or reskin it in place '
-      + 'instead of cloning.'],
+      'That name has no model of its own, so the workshop has nothing to export — it is a '
+      + 'texture set belonging to a character built from shared sub-entries. 67 such names '
+      + 'exist in the game and none of them can be used here, which is why none of them '
+      + 'appear in the pickers above. Every name this page offers has been checked against '
+      + 'the model table. If you typed a name yourself, pick it from the dropdown instead.'],
     ['The command does nothing / "not recognised"',
       'You are not in the folder holding mercs2_workshop.exe. cd into it first, or replace '
       + 'the .\\ with the full path to the exe. The leading .\\ is required on Windows — '
@@ -325,9 +335,11 @@ function renderDetail(root, c, goal) {
     ['I dropped the folder and the tool says it is not a bundle',
       'Drop the folder named after the character, the one containing manifest.json. Dropping '
       + 'its parent, or the textures folder on its own, will not work.'],
-    ['The export has no textures folder',
-      'The character has no textures of its own — it borrows another character\'s. Nothing '
-      + 'to reskin there; pick a different one.'],
+    ['The character "has no sheets of its own" — is it still usable?',
+      'Yes. That label means its textures are named after another character, not that it '
+      + 'has none: the export still contains every texture its model draws with. It makes '
+      + 'a perfectly good body and a perfectly good outfit donor. The one thing to know is '
+      + 'that reskinning those textures in place also changes whoever else uses them.'],
     ['My skin loaded but the face looks flattened',
       'You cloned a two-block character. 38 of the 85 characters with a model are '
       + 'single-block and keep full detail when cloned — those are the ones marked ✓. '

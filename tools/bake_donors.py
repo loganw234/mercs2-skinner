@@ -42,17 +42,19 @@ FACTIONS = {
 PART_ORDER = {"ub": 0, "lb": 1, "head": 2, "hair": 3}
 
 
+def h(s):
+    """pandemic_hash_m2 -- FNV-1a 32-bit, case-folded, finalised ^0x2A then one more mul."""
+    if not s:
+        return 0
+    v = 0x811C9DC5
+    for c in s.encode():
+        v = ((v ^ (c | 0x20)) * 0x01000193) & 0xFFFFFFFF
+    v ^= 0x2A
+    return (v * 0x01000193) & 0xFFFFFFFF
+
+
 def load_names():
     """Front-coded name list -> {hash: name} using pandemic_hash_m2."""
-    def h(s):
-        if not s:
-            return 0
-        v = 0x811C9DC5
-        for c in s.encode():
-            v = ((v ^ (c | 0x20)) * 0x01000193) & 0xFFFFFFFF
-        v ^= 0x2A
-        return (v * 0x01000193) & 0xFFFFFFFF
-
     names, prev = [], ""
     for line in open(NAMES, encoding="utf8").read().split("\n"):
         if not line:
@@ -119,11 +121,14 @@ def main():
             "sheets": sheets,
         })
 
-    # Everything else that owns its own body sheets. These have NO primary model ASET row
-    # (they are sub-entry only, like pmc_hum_jennifer), so they cannot host cloned variants
-    # -- but their own textures can be replaced, which reskins them in place. That is a
-    # different job with a different answer, and conflating the two is exactly what makes
-    # this confusing for a newcomer.
+    # ★ TEXTURE-ONLY sets. These names are recovered from TEXTURE names, and every one of
+    # them has NO model ASET row and does not appear in `--list MODELS` -- verified, 0 of 67.
+    # `mercs2_workshop --export-bundle` therefore fails on all of them with
+    #     [FAIL] ch_hum_officer (0xD2A9DF48): no model ASET for 0xD2A9DF48
+    # so they CANNOT be loaded into the tool at all: not as a body, not as a reskin target,
+    # and not as an outfit donor. They are kept here only to record that the texture sets
+    # exist. Never put them in a picker -- an earlier build offered all 67 as outfit donors
+    # and every one of them was a dead end.
     # NB: keyed on the NAME LIST, not the texture scan. `--tex-scan` only reported 3,777 of
     # the game's 13,374 textures, so requiring a scan hit silently dropped almost every
     # character. Dimensions are attached when the scan knows them and left null otherwise.
@@ -140,7 +145,7 @@ def main():
     have_model = {d["name"] for d in donors}
     reskin = []
     for base, parts in owned.items():
-        if base in have_model:
+        if base in have_model or h(base) in models:
             continue
         sheets = [{"part": p, "name": parts[p],
                    **(tex.get(parts[p]) or {"size": None, "fmt": None})}
@@ -184,10 +189,20 @@ def main():
             c["sheets"] = merged
             c["ownSheets"] = any(s["part"] in ("ub", "lb") for s in merged)
 
-    json.dump({"donors": donors, "reskin": reskin},
+    # Assert the split rather than trusting it. The whole reason texture-only entries are
+    # dangerous is that they LOOK like characters; if one ever gained a model row it should
+    # move into `donors`, and if a donor ever lost one the tool would offer a dead end.
+    bad = [d["name"] for d in donors if h(d["name"]) not in models]
+    if bad:
+        raise SystemExit("donors without a model ASET row (cannot be exported): %s" % bad)
+    bad = [r["name"] for r in reskin if h(r["name"]) in models]
+    if bad:
+        raise SystemExit("texture-only entries that DO have a model row: %s" % bad)
+
+    json.dump({"donors": donors, "textureOnly": reskin},
               open(out_path, "w"), separators=(",", ":"))
     print("%d character MODELS (%d single-block = clone-safe, %d two-block) "
-          "+ %d reskin-only -> %s (%.0f KB)"
+          "+ %d texture-only (NOT exportable) -> %s (%.0f KB)"
           % (len(donors), safe, len(donors) - safe, len(reskin),
              os.path.basename(out_path), os.path.getsize(out_path) / 1024))
     print()
@@ -196,7 +211,7 @@ def main():
         g = [d for d in donors if d["faction"] == f]
         print("    %-22s %2d / %2d" % (f, sum(1 for d in g if d["blocks"] == 1), len(g)))
     print()
-    print("  reskin-only, by faction:")
+    print("  texture-only (NOT exportable), by faction:")
     for f in sorted({d["faction"] for d in reskin}):
         print("    %-22s %2d" % (f, sum(1 for d in reskin if d["faction"] == f)))
 
