@@ -2,7 +2,7 @@
 
 Make new skins for Mercenaries 2 characters, in your browser.
 
-**→ https://loganw234.github.io/mercs2-skinner/**
+**→ https://skins.mercs2.tools/**
 
 Or download [`dist/mercs2-skinner.html`](dist/mercs2-skinner.html) and open it offline — one
 self-contained file, no install, no network, no server.
