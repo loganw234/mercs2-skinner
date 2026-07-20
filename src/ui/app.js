@@ -6,7 +6,7 @@
 import { readBundle, sortBundleFiles, MISSING_HINT } from '../bundle.js';
 import { buildUcfxTexture, isPow2 } from '../texture.js';
 import { planExport, buildCommands, buildModkitMod, preflight, hex8, sanitizeAssetName } from '../export.js';
-import { setNameSource } from '../names.js';
+import { setNameSource, nameForHash } from '../names.js';
 import { makeZip } from '../zip.js';
 import { buildMask, applyShift, previewMask, maskCount, cloneImage, rgbToHsv, hsvToRgb } from '../recolor.js';
 import { Preview } from '../preview.js';
@@ -243,7 +243,10 @@ function renderExport() {
   const cw = $('#checks');
   cw.innerHTML = '';
   for (const e of edits) {
-    for (const c of preflight({ width: e.rec.width, height: e.rec.height, texture: e.texture, name: S.skinName })) {
+    const item = plan.items.find((i) => i.originalHash === e.texture.hash);
+    const clash = item ? nameForHash(item.texHash) : null;
+    const collide = item ? { hit: clash, name: item.texName } : null;
+    for (const c of preflight({ width: e.rec.width, height: e.rec.height, texture: e.texture, name: S.skinName, collide })) {
       if (c.ok && c.id !== 'name') continue;      // only surface problems, plus the name
       const chip = el('span', `chip ${c.ok ? 'ok' : 'bad'}`,
         `${(e.texture.described && e.texture.described.part) || e.texture.hash} — ${c.title}: ${c.text}`);

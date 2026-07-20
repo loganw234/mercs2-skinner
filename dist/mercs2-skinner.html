@@ -1651,7 +1651,10 @@ function renderExport() {
   const cw = $('#checks');
   cw.innerHTML = '';
   for (const e of edits) {
-    for (const c of preflight({ width: e.rec.width, height: e.rec.height, texture: e.texture, name: S.skinName })) {
+    const item = plan.items.find((i) => i.originalHash === e.texture.hash);
+    const clash = item ? nameForHash(item.texHash) : null;
+    const collide = item ? { hit: clash, name: item.texName } : null;
+    for (const c of preflight({ width: e.rec.width, height: e.rec.height, texture: e.texture, name: S.skinName, collide })) {
       if (c.ok && c.id !== 'name') continue;      // only surface problems, plus the name
       const chip = el('span', `chip ${c.ok ? 'ok' : 'bad'}`,
         `${(e.texture.described && e.texture.described.part) || e.texture.hash} — ${c.title}: ${c.text}`);
