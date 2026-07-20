@@ -77,6 +77,7 @@ if (collisions.length) {
 const body = order.map((m) => `// ===== ${relative(ROOT, m.path).replace(/\\/g, '/')} =====\n${m.code}`).join('\n\n');
 
 const names = readFileSync(resolve(ROOT, 'data/asset_names.txt'), 'utf8');
+const donors = readFileSync(resolve(ROOT, 'data/donors.json'), 'utf8');
 let html = readFileSync(resolve(ROOT, 'index.html'), 'utf8');
 const scriptRe = /<script type="module">[\s\S]*?<\/script>/;
 if (!scriptRe.test(html)) throw new Error('index.html: no <script type="module"> entry point found');
@@ -85,7 +86,8 @@ html = html.replace(scriptRe,
   // work from file://, and without names the modkit export is impossible (its swap
   // contract targets a texture BY NAME) and the UI would show bare hashes.
   '<script type="module">\n' +
-  `window.__SKINNER_NAMES__ = ${JSON.stringify(names)};\n\n` +
+  `window.__SKINNER_NAMES__ = ${JSON.stringify(names)};\n` +
+  `window.__SKINNER_DONORS__ = ${donors};\n\n` +
   body + '\n\n' +
   'boot().catch((e) => {\n' +
   "  document.getElementById('error').hidden = false;\n" +
@@ -103,13 +105,13 @@ if (/import\.meta/.test(codeOnly)) {
 }
 // Any fetch() of a sibling file fails under file://. The asset-name list is the only such
 // dependency, and it must have been inlined as a global above.
-if (/fetch\(['"]\.\//.test(codeOnly) && !/__SKINNER_NAMES__/.test(codeOnly)) {
+if (/fetch\(['"]\.\//.test(codeOnly) && !(/__SKINNER_NAMES__/.test(codeOnly) && /__SKINNER_DONORS__/.test(codeOnly))) {
   throw new Error('bundle fetches a local file but no inlined data global was emitted');
 }
 
 mkdirSync(resolve(ROOT, 'dist'), { recursive: true });
 const out = resolve(ROOT, 'dist/mercs2-skinner.html');
 writeFileSync(out, html);
-console.log(`bundled ${order.length} modules + ${(names.length/1024).toFixed(0)} KB of asset names -> dist/mercs2-skinner.html ` +
+console.log(`bundled ${order.length} modules + ${((names.length+donors.length)/1024).toFixed(0)} KB of baked data -> dist/mercs2-skinner.html ` +
   `(${(html.length / 1024).toFixed(0)} KB)`);
 console.log('  order: ' + order.map((m) => relative(ROOT, m.path).replace(/\\/g, '/')).join(' -> '));

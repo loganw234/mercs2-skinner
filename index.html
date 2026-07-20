@@ -88,6 +88,33 @@
   .tag { font-size:10px; font-weight:400; padding:1px 7px; border-radius:10px;
          border:1px solid var(--line); color:var(--faint); margin-left:6px; }
   .tag.rec { color:var(--ok); border-color:#1e5236; }
+  .wz-q { font-weight:600; margin:14px 0 8px; }
+  .wz-q:first-child { margin-top:0; }
+  .wz-opts { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  @media (max-width:760px){ .wz-opts { grid-template-columns:1fr; } }
+  .wz-opt { text-align:left; background:var(--panel2); border:1px solid var(--line);
+            border-radius:8px; padding:12px; cursor:pointer; color:var(--fg); font:inherit; }
+  .wz-opt:hover { border-color:var(--accent); }
+  .wz-opt.sel { outline:1px solid var(--accent); background:#1d2c47; }
+  .wz-opt-t { font-weight:600; margin-bottom:4px; }
+  .wz-opt-s { color:var(--dim); font-size:12px; }
+  .wz-note { color:var(--dim); font-size:12px; margin:8px 0; line-height:1.5; }
+  .wz-ok { color:var(--ok); font-size:12px; margin:8px 0; }
+  .wz-sheets { font-family:ui-monospace,monospace; font-size:12px; color:var(--dim); margin:8px 0; }
+  .wz-field { display:block; margin:10px 0; }
+  .wz-field span { display:block; color:var(--dim); font-size:12px; margin-bottom:4px; }
+  #wz-cmd { margin:10px 0; white-space:pre-wrap; word-break:break-all; }
+  .wz-tro { margin-top:14px; border-top:1px solid var(--line); padding-top:10px; }
+  .wz-tro summary { cursor:pointer; color:var(--warn); font-size:12px; }
+  .wz-tro ul { margin:10px 0 0; padding-left:18px; color:var(--dim); font-size:12px; }
+  .wz-tro li { margin-bottom:9px; }
+  .wz-tro b { color:var(--fg); }
+  a { color:var(--accent); }
+  .wz-tpl { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
+  .wz-tpl-a { display:inline-block; padding:4px 10px; border-radius:5px; font-size:12px;
+              background:var(--panel2); border:1px solid var(--line); color:var(--fg);
+              text-decoration:none; font-family:ui-monospace,monospace; }
+  .wz-tpl-a:hover { border-color:var(--accent); color:var(--accent); }
   .recolor { margin-top:10px; padding:10px; background:var(--panel2); border:1px solid var(--line); border-radius:6px; }
   .swatch { width:22px; height:22px; border-radius:4px; border:1px solid var(--line); display:inline-block; }
   .sl { display:grid; grid-template-columns:76px 1fr 52px; gap:8px; align-items:center; margin-bottom:5px;
@@ -115,6 +142,19 @@
   <div id="status" hidden></div>
   <div id="note" hidden></div>
   <div id="error" hidden></div>
+
+  <section>
+    <h2><span class="n">0</span>Start here</h2>
+    <div class="panel">
+      <div id="wizard"></div>
+      <div class="muted" style="margin-top:14px">
+        Need the tool? <b>mercs2_workshop</b> is in the
+        <a href="https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/releases" target="_blank" rel="noopener">community toolchain releases</a>.
+        Run it with no arguments to browse every character in 3D and read its name — much
+        easier than guessing from a list.
+      </div>
+    </div>
+  </section>
 
   <section>
     <h2><span class="n">1</span>Bundle</h2>

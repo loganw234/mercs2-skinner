@@ -7,12 +7,12 @@ import { readBundle, sortBundleFiles, MISSING_HINT } from '../bundle.js';
 import { buildUcfxTexture, isPow2 } from '../texture.js';
 import { planExport, buildCommands, buildModkitMod, preflight, hex8, sanitizeAssetName } from '../export.js';
 import { setNameSource, nameForHash } from '../names.js';
+import { setCatalogue, buildWizard, onDonorPicked } from './wizard.js';
+import { $, el } from './dom.js';
 import { makeZip } from '../zip.js';
 import { buildMask, applyShift, previewMask, maskCount, cloneImage, rgbToHsv, hsvToRgb } from '../recolor.js';
 import { Preview } from '../preview.js';
 
-const $ = (s) => document.querySelector(s);
-const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x !== undefined) e.textContent = x; return e; };
 
 const S = {
   bundle: null,
@@ -28,6 +28,22 @@ export async function boot() {
   // Bundled build inlines the name list; dev build fetches it. Without it the modkit
   // export is impossible (it targets textures by name) and the UI shows bare hashes.
   setNameSource(window.__SKINNER_NAMES__ || await fetch('./data/asset_names.txt').then((r) => r.text()));
+
+  // Step 0. Baked in so a newcomer never has to know a character name up front.
+  setCatalogue(window.__SKINNER_DONORS__
+    || await fetch('./data/donors.json').then((r) => r.json()));
+  buildWizard($('#wizard'));
+  onDonorPicked((c, goal) => {
+    S.wizardChar = c;
+    S.wizardGoal = goal;
+    // Pre-name the skin after the character they picked, so the export section is already
+    // sensible before they have typed anything.
+    if (!S.skinName || /_custom$/.test(S.skinName)) {
+      S.skinName = sanitizeAssetName(c.name + '_custom');
+      if ($('#skin-name')) $('#skin-name').value = S.skinName;
+    }
+  });
+
   preview = new Preview($('#preview'));
   if (!preview.ok) $('#preview-note').textContent = 'WebGL unavailable — the 3D preview is disabled.';
 
