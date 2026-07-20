@@ -1,0 +1,22 @@
+{
+  "name": "mechanic_blueprint",
+  "kind": "texture-swap",
+  "target": "pmc_hum_mechanic",
+  "generatedBy": "mercs2-skinner (bundled sample)",
+  "textures": [
+    {
+      "name": "pmc_hum_mechanic_ub",
+      "image_path": "pmc_hum_mechanic_ub.png",
+      "hash": "0x98529145",
+      "size": "512x512",
+      "role": "diffuse"
+    },
+    {
+      "name": "pmc_hum_mechanic_lb",
+      "image_path": "pmc_hum_mechanic_lb.png",
+      "hash": "0x87F9725E",
+      "size": "512x512",
+      "role": "diffuse"
+    }
+  ]
+}
