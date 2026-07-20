@@ -57,11 +57,14 @@ export function buildWizard(root) {
     rest.appendChild(el('div', 'wz-q', 'Which character?'));
 
     if (g === 'variants') {
+      const safe = list.filter((c) => c.blocks === 1).length;
       rest.appendChild(el('div', 'wz-note',
-        'Only these nine can host new outfits. A character needs its own model entry to be '
-        + 'clonable, and most of the roster is stored as a shared sub-entry instead — those '
-        + 'can still be reskinned, just not duplicated. Every one listed here is also '
-        + 'single-block, meaning a clone keeps its full detail at distance.'));
+        `${list.length} characters have a model of their own and can host new outfits. `
+        + `${safe} of them are single-block, meaning a clone keeps full detail at every `
+        + 'distance — those are listed first and marked ✓. The rest are two-block: cloning '
+        + 'one works, but it loses its finer geometry and the face visibly flattens. The '
+        + 'remainder of the roster is stored as shared sub-entries and can be reskinned in '
+        + 'place but never duplicated.'));
     }
 
     // Whether a ready-made template exists is the single most useful thing to know before
@@ -82,14 +85,20 @@ export function buildWizard(root) {
     for (const f of Object.keys(byFaction).sort()) {
       const og = document.createElement('optgroup');
       og.label = f;
-      // Template-ready first within each faction, so they are not buried.
+      // Clone-safe first (only meaningful under "add outfits"), then template-ready, so
+      // the options that will actually work well are not buried under ones that will not.
       const sorted = [...byFaction[f]].sort((a, b) =>
-        (b.template ? 1 : 0) - (a.template ? 1 : 0) || a.name.localeCompare(b.name));
+        (a.blocks === 1 ? 0 : 1) - (b.blocks === 1 ? 0 : 1)
+        || (b.template ? 1 : 0) - (a.template ? 1 : 0)
+        || a.name.localeCompare(b.name));
       for (const c of sorted) {
         const n = (c.template || []).length;
-        const tpl = n ? `✓ ${n} template${n === 1 ? '' : 's'}` : 'no template';
-        const parts = c.sheets.length ? c.sheets.map((s) => s.part).join(', ') : '';
-        const o = el('option', null, `${c.name}   (${parts})   ${tpl}`);
+        const bits = [];
+        if (c.blocks === 1) bits.push('✓ full detail');
+        else if (c.blocks === 2) bits.push('⚠ loses detail if cloned');
+        if (n) bits.push(`${n} template${n === 1 ? '' : 's'}`);
+        const parts = c.sheets.length ? c.sheets.map((s) => s.part).join(', ') : 'no own sheets';
+        const o = el('option', null, `${c.name}   (${parts})   ${bits.join(' · ')}`);
         o.value = c.name;
         og.appendChild(o);
       }
@@ -118,9 +127,23 @@ function renderDetail(root, c, goal) {
   root.appendChild(el('div', 'wz-sheets', `Sheets: ${sheets}`));
 
   if (goal === 'variants') {
-    root.appendChild(el('div', 'wz-ok',
-      'Clone-safe. This character keeps all its geometry in one place, so a copy of it looks '
-      + 'exactly as sharp as the original.'));
+    if (c.blocks === 1) {
+      root.appendChild(el('div', 'wz-ok',
+        '✓ Clone-safe. This character keeps all its geometry in one place, so a copy of it '
+        + 'looks exactly as sharp as the original.'));
+    } else if (c.blocks === 2) {
+      root.appendChild(el('div', 'wz-warn',
+        '⚠ Cloning this one costs detail. Its finer geometry lives in a second block that a '
+        + 'clone cannot carry, so your version renders its coarsest tier at every distance — '
+        + 'the face visibly flattens. It still works, and reskinning it in place instead '
+        + 'avoids the problem entirely.'));
+    }
+    if (!c.ownSheets) {
+      root.appendChild(el('div', 'wz-note',
+        'This character has no body textures of its own — it borrows another character\'s. '
+        + 'You can still clone it, but the textures you repoint belong to someone else, so '
+        + 'check the preview carefully.'));
+    }
   }
 
   // --- the no-setup path ---

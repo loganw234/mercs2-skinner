@@ -21,7 +21,9 @@ Inputs (all produced by tools already in this repo or the community project):
   texscan.tsv   mercs2_workshop --tex-scan
   asset_names   data/asset_names.txt (this repo)
 
-  python bake_donors.py <vz_aset.tsv> <texscan.tsv> [out.json]
+  python bake_donors.py <vz_aset.tsv> <texscan.tsv> <models.tsv> [out.json]
+
+where models.tsv is `mercs2_workshop --list | grep ^MODELS`.
 """
 import json
 import os
@@ -63,7 +65,8 @@ def load_names():
 
 def main():
     aset_path, texscan_path = sys.argv[1], sys.argv[2]
-    out_path = sys.argv[3] if len(sys.argv) > 3 else OUT_DEFAULT
+    models_path = sys.argv[3] if len(sys.argv) > 3 else None
+    out_path = sys.argv[4] if len(sys.argv) > 4 else OUT_DEFAULT
     by_hash, all_names = load_names()
 
     # texture dimensions, keyed by name
@@ -80,21 +83,33 @@ def main():
         if len(p) >= 6 and p[5].strip() == "19":
             models[int(p[0], 16)] = (int(p[2]), int(p[3]))
 
+    # ★ Names come from `mercs2_workshop --list`, NOT from reverse-resolving each hash
+    # through the recovered name list. That reverse lookup found 9 of the 85 character
+    # models -- every hash absent from the 10,047 recovered names was silently dropped,
+    # which threw away 3/4 of the usable donors including civ_hum_beachfemale_c and _d.
+    # The workshop prints hash AND name together; use that.
+    listed = {}
+    if models_path:
+        for line in open(models_path, encoding="utf8", errors="ignore"):
+            p = line.rstrip("\n").split("\t")
+            if len(p) >= 3 and p[0].strip() == "MODELS" and "_hum_" in p[2]:
+                listed[int(p[1].strip(), 16)] = p[2].strip()
+
     donors = []
-    for hh, (blk, sub) in models.items():
-        name = by_hash.get(hh)
-        if not name or "_hum_" not in name:
-            continue
+    for hh, name in sorted(listed.items(), key=lambda kv: kv[1]):
+        blk, sub = models.get(hh, (None, 65535))
         sheets = []
         for part in ("ub", "lb", "head", "hair"):
             for cand in ("%s_%s" % (name, part), "%s%s" % (name, part)):
                 if cand in tex:
                     sheets.append({"part": part, "name": cand, **tex[cand]})
                     break
-        if not any(s["part"] in ("ub", "lb") for s in sheets):
-            continue          # not independently reskinnable
+        # A character with no body sheets of its own can still be a BASE -- it just borrows
+        # someone else's textures, so reskinning it in place is not meaningful. Keep it as a
+        # clone donor and say so, rather than hiding it.
         sheets.sort(key=lambda s: PART_ORDER.get(s["part"], 9))
         donors.append({
+            "ownSheets": bool([s for s in sheets if s["part"] in ("ub", "lb")]),
             "name": name,
             "faction": FACTIONS.get(name.split("_")[0], name.split("_")[0]),
             "hash": "0x%08X" % hh,
@@ -143,17 +158,43 @@ def main():
 
     donors.sort(key=lambda d: (d["faction"], d["name"]))
     safe = sum(1 for d in donors if d["blocks"] == 1)
+    # ★ Where a template exists, IT is the authority on which sheets a character has: it
+    # was generated from what the model actually paints. The name/texscan guess is only a
+    # fallback, and `--tex-scan` covers 3,777 of 13,374 textures, so trusting it produced
+    # "no own sheets" for characters that plainly have three. Never assert absence from a
+    # partial index.
+    tpl_root = os.path.join(HERE, "..", "templates")
+    for grp in (donors, reskin):
+        for c in grp:
+            d = os.path.join(tpl_root, c["name"])
+            if not os.path.isdir(d):
+                continue
+            painted = sorted(f[:-len("_SAFE.png")] for f in os.listdir(d)
+                             if f.endswith("_SAFE.png"))
+            if not painted:
+                continue
+            known = {s["name"]: s for s in c["sheets"]}
+            merged = []
+            for nm in painted:
+                part = next((p_ for p_ in ("ub", "lb", "head", "hair")
+                             if nm.endswith("_" + p_) or nm.endswith(p_)), "other")
+                merged.append(known.get(nm) or {"part": part, "name": nm,
+                                                "size": None, "fmt": None})
+            merged.sort(key=lambda s: PART_ORDER.get(s["part"], 9))
+            c["sheets"] = merged
+            c["ownSheets"] = any(s["part"] in ("ub", "lb") for s in merged)
+
     json.dump({"donors": donors, "reskin": reskin},
               open(out_path, "w"), separators=(",", ":"))
-    print("%d CLONE donors (%d clone-safe) + %d reskin-only characters -> %s (%.0f KB)"
-          % (len(donors), safe, len(reskin), os.path.basename(out_path),
-             os.path.getsize(out_path) / 1024))
+    print("%d character MODELS (%d single-block = clone-safe, %d two-block) "
+          "+ %d reskin-only -> %s (%.0f KB)"
+          % (len(donors), safe, len(donors) - safe, len(reskin),
+             os.path.basename(out_path), os.path.getsize(out_path) / 1024))
     print()
-    print("  clone donors (can host unlimited new variants):")
-    for d in donors:
-        print("    %-26s %-20s %d block  %s" % (
-            d["name"], d["faction"], d["blocks"],
-            " ".join("%s:%s" % (s["part"], s["size"]) for s in d["sheets"])))
+    print("  by faction (single-block / total):")
+    for f in sorted({d["faction"] for d in donors}):
+        g = [d for d in donors if d["faction"] == f]
+        print("    %-22s %2d / %2d" % (f, sum(1 for d in g if d["blocks"] == 1), len(g)))
     print()
     print("  reskin-only, by faction:")
     for f in sorted({d["faction"] for d in reskin}):
