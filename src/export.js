@@ -197,7 +197,7 @@ export function buildModkitMod({ bundle, plan, skinName }) {
 }
 
 /** Checks that stop a texture the engine will reject or mis-stream. */
-export function preflight({ width, height, texture, name }) {
+export function preflight({ width, height, texture, name, collide }) {
   const out = [];
   const pow2 = (n) => n > 0 && (n & (n - 1)) === 0;
   out.push({
@@ -219,6 +219,18 @@ export function preflight({ width, height, texture, name }) {
     detail: 'Names are hashed case-insensitively into a flat namespace. Pick something ' +
       'distinctive — a collision silently replaces an existing asset.',
   });
+  // A 32-bit hash over a flat namespace WILL eventually collide, and a collision does not
+  // error -- it silently REPLACES whatever game asset it landed on. Free to check against
+  // the names we can already resolve, so check.
+  if (collide) {
+    out.push({
+      id: 'collision', title: 'Name collision', ok: !collide.hit,
+      text: collide.hit ? `"${collide.name}" already exists as ${collide.hit}` : 'none',
+      detail: 'This name hashes to the same value as a real game asset and would silently ' +
+        'replace it. Rename. Only assets whose names have been recovered can be checked, ' +
+        'so a clean result is not a guarantee at very large batch sizes.',
+    });
+  }
   out.push({
     id: 'budget', title: 'Texture memory', ok: width * height <= 1024 * 1024,
     text: `${((width * height) / 1024 / 1024).toFixed(2)} Mpx`,
