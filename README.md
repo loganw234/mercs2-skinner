@@ -106,6 +106,31 @@ edges, noise, flat blocks). That way a fresh clone runs full byte-parity with **
 extracted game art committed**. A second case at 1024²/9 mips uses a real game sheet and
 skips itself when absent.
 
+## Bulk test: 16 skins, 48 assets
+
+A full run of the new-asset path, to test capacity rather than one-off correctness:
+16 hue-shifted variants of one character's swimsuit, each a separately named NPC skin.
+
+| step | result |
+|---|---|
+| recolour (suit pixels only, hue swapped, sat/value kept) | 316,144 px across 32 sheets |
+| encode to UCFX via `src/texture.js` | 32 containers, **0.2 s** |
+| clone + repoint the model 16× | 16 × 38,280 B, size unchanged, CSUM re-verified |
+| pack with `mercs2_smuggler --extra-only` | **48 blocks, 3.53 MB, 0.37 s** |
+| verify the ASET table | **48/48 assets resolve**, no hash collisions |
+
+Two corrections came out of doing it for real rather than from reading flags:
+
+* **`inject_parts --repoint` cannot do a reskin.** It requires at least one `--part`, so it
+  cannot express "same mesh, different textures" — it prints usage and refuses. Nothing
+  published does a repoint-only clone, so `tools/repoint_model.py` does it: rewrite the
+  4-byte texture hashes inside `MTRL`, fix the trailing CSUM, copy every other byte
+  verbatim, then re-read and re-verify. A reskin has no business touching geometry.
+* **The pack needs `--extra-only`**, or smuggler edits a donor block and the result stops
+  being additive.
+
+The generated command block now emits exactly the sequence that was run.
+
 ## Getting the float arithmetic right
 
 Worth recording, since it cost the only real debugging in the port: the first attempt

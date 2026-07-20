@@ -80,12 +80,21 @@ export function run(t) {
 
   const cmd = buildCommands({ bundle, plan });
   t.ok('command block repoints BOTH edited textures',
-    cmd.includes(`--repoint 0x8DE46BB7:${hex8(plan.items[0].texHash)}`) &&
-    cmd.includes(`--repoint 0xD7DE49F7:${hex8(plan.items[1].texHash)}`), cmd);
-  t.eq('exactly one inject_parts invocation', (cmd.match(/inject_parts /g) || []).length, 1);
+    cmd.includes(`0x8DE46BB7:${hex8(plan.items[0].texHash)}`) &&
+    cmd.includes(`0xD7DE49F7:${hex8(plan.items[1].texHash)}`), cmd);
+  // Assert on the RUNNABLE lines only: the block deliberately explains in comments why
+  // inject_parts is not used, and that prose must not trip these checks.
+  const runnable = cmd.split('\n').filter((l) => l.trim() && !l.trim().startsWith('#')).join('\n');
+  t.eq('exactly one repoint invocation', (runnable.match(/repoint_model\.py/g) || []).length, 1);
   t.ok('command block clones the raw block rather than editing in place',
-    cmd.includes('inject_parts raw/block2110_P000.ucfx'));
-  t.ok('every new texture is injected', (cmd.match(/--inject-extra/g) || []).length === 3,
+    runnable.includes('repoint_model.py raw/block2110_P000.ucfx'));
+  // inject_parts REQUIRES at least one --part, so it cannot express "same mesh, different
+  // textures" -- verified against the real binary, which printed usage and refused. This
+  // assertion exists so that dead end is never re-emitted.
+  t.ok('does NOT run inject_parts, which requires a --part', !runnable.includes('inject_parts'));
+  // --extra-only is what makes the pack additive: "add blocks, never touch a donor block".
+  t.ok('packs with --extra-only so no donor block is touched', runnable.includes('--extra-only'));
+  t.ok('every new texture is injected', (runnable.match(/--inject-extra/g) || []).length === 3,
     'expected 2 textures + 1 model');
   t.ok('command block ends with how to wear it', cmd.includes('Player.SetOutfit'));
 
@@ -111,5 +120,5 @@ export function run(t) {
   t.ok('and are reported rather than dropped silently', !!mkAnon.blocked, 'no blocked message');
   t.ok('the blocked message names the offending hash', mkAnon.blocked.includes('0xB8555125'));
   t.ok('the new-asset path still covers the unnamed texture',
-    buildCommands({ bundle, plan: anon }).includes('--repoint 0xB8555125:'));
+    buildCommands({ bundle, plan: anon }).includes('0xB8555125:'));
 }

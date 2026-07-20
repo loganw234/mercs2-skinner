@@ -6,7 +6,7 @@
 //
 //   1. a NEW texture asset, named by the user, hashed with pandemic_hash_m2
 //   2. a NEW model asset cloned from the donor's ORIGINAL block bytes (bundle raw/),
-//      with its material texture references repointed at (1) via inject_parts --repoint
+//      with its material texture references repointed at (1) -- see buildCommands()
 //
 // The original character is untouched and the new one is selectable by name in Lua.
 
@@ -97,37 +97,54 @@ export function planExport({ bundle, edits, skinName }) {
   };
 }
 
-/** The additive path: mint NEW texture + model assets, originals untouched. */
+/** The additive path: mint NEW texture + model assets, originals untouched.
+ *
+ *  This recipe was RUN, not inferred. Two corrections came out of doing it for real:
+ *  `inject_parts --repoint` cannot express a reskin (it requires at least one `--part`,
+ *  and refuses otherwise), and the pack needs `--extra-only` or it will touch a donor
+ *  block and stop being additive.
+ */
 export function buildCommands({ bundle, plan }) {
   const lod = (bundle.manifest.lod_chain || [])[0];
   const rawName = lod ? `block${lod.block}_P000.ucfx` : 'block<N>_P000.ucfx';
-  const repoints = plan.items.map((i) => `    --repoint ${i.originalHash}:${hex8(i.texHash)}`);
-  const injects = plan.items.map((i) => `                --inject-extra ${hex8(i.texHash)}:27:${i.file} \\`);
-  return [
+  const CONT = ' \\';
+  const lines = [
     `# ADDITIVE reskin of "${bundle.name}" — originals untouched, this is a NEW outfit.`,
     `#`,
     `# new model asset : ${plan.modelName}  ${hex8(plan.modelHash)}`,
     ...plan.items.map((i) =>
-      `# new texture     : ${i.texName}  ${hex8(i.texHash)}   (replaces ${i.originalName || i.originalHash})`),
+      `# new texture     : ${i.texName}  ${hex8(i.texHash)}   (was ${i.originalName || i.originalHash})`),
     ``,
-    `# 1. clone the donor's ORIGINAL block bytes into a new-hash model whose materials`,
-    `#    point at your textures instead. raw/ came with the export bundle.`,
-    `inject_parts raw/${rawName} ${plan.modelName}.ucfx \\`,
-    `    --name-hash ${hex8(plan.modelHash)} \\`,
-    repoints.join(' \\\n'),
+    `# 1. Clone the donor's model container, repointing its material texture references.`,
+    `#    NOT inject_parts --repoint: that requires at least one --part, so it cannot`,
+    `#    express "same mesh, different textures". repoint_model.py rewrites only the`,
+    `#    4-byte hashes inside MTRL plus the trailing CSUM; every geometry byte is copied`,
+    `#    verbatim, and it re-verifies the result before writing.`,
+    `python repoint_model.py raw/${rawName} ${plan.modelName}.ucfx` + CONT,
+  ];
+  plan.items.forEach((i, n) => {
+    lines.push(`    ${i.originalHash}:${hex8(i.texHash)}` + (n < plan.items.length - 1 ? CONT : ''));
+  });
+  lines.push(
     ``,
-    `# 2. put every new asset into a patch WAD (texture type_id 27, model type_id 19)`,
-    `mercs2_smuggler \\`,
-    ...injects,
-    `                --inject-extra ${hex8(plan.modelHash)}:19:${plan.modelName}.ucfx \\`,
-    `                --out ${plan.modelName}-patch.wad`,
+    `# 2. Pack every new asset into a patch WAD. --extra-only means "add blocks, never`,
+    `#    touch a donor block" — that flag is what keeps this additive.`,
+    `mercs2_smuggler --source-wad "<game>/data/vz.wad" --extra-only` + CONT,
+  );
+  for (const i of plan.items) {
+    lines.push(`    --inject-extra ${hex8(i.texHash)}:27:${i.file}` + CONT);
+  }
+  lines.push(
+    `    --inject-extra ${hex8(plan.modelHash)}:19:${plan.modelName}.ucfx` + CONT,
+    `    -o ${plan.modelName}-patch.wad`,
     ``,
-    `# 3. install it. Either import the patch WAD in the modkit (which merges it with your`,
-    `#    other mods), or if you have no other patch, drop it in as data/vz-patch.wad.`,
+    `# 3. Install. Import the patch WAD in the modkit (it merges with your other mods), or`,
+    `#    if you have no other patch, drop it in as data/vz-patch.wad.`,
     ``,
-    `# 4. wear it in-game`,
+    `# 4. Wear it in-game`,
     `#    Player.SetOutfit(Player.GetLocalCharacter(), "${plan.modelName}")`,
-  ].join('\n');
+  );
+  return lines.join('\n');
 }
 
 /**
