@@ -37,6 +37,7 @@ model in 3D, and exports an engine-ready container.
 | you get | PNGs + `mod.json` in a zip | `.ucfx` containers + a build script |
 | packing | the modkit does everything | three commands (script included) |
 | original | restored by uninstalling the mod | never touched; both coexist |
+| geometry | **correct** — model untouched | **coarse LOD only** (see below) |
 | in game | the character just looks different | `Player.SetOutfit(char, "your_skin")` |
 
 **A** exists because the modkit already solves the hard part. Its texture-swap contract is
@@ -78,6 +79,29 @@ mercs2_workshop --export-bundle <character> --out mychar
    sheet size, because the texture pool has a hard cell cap and upscaling a 256 sheet to
    1024 costs 16× the budget for no visible gain at gameplay distance.
 5. **Check the 3D preview**, then export.
+
+## ⚠ The new-asset path renders at the coarsest LOD
+
+Confirmed in game, 2026-07-20. A new-asset skin looks right in colour but its **face
+visibly flattens**, because the clone carries only the RESIDENT block.
+
+A character's geometry is split across two blocks. The resident one (`_P000`) holds the
+material bindings and the coarsest tier — on `civ_hum_beachfemale_a` that is **639
+triangles**. The finer rungs live in `_P001`, which is **pure geometry with no MTRL chunk
+at all** and is located by PATH naming, not by hash. `mercs2_smuggler --inject-extra` gives
+a block a hash but no path, so a cloned model has no `_P001` sibling for the engine to
+find, and the coarse tier renders at every distance — 639 triangles instead of 3,856.
+
+That is a limitation of the published tooling, not something this tool can work around:
+fixing it needs path control over injected blocks so the sibling rung can be named.
+
+**So choose deliberately:**
+
+* **One good-looking recolour → modkit export.** It never clones the model, so geometry and
+  LODs are untouched and correct.
+* **Several skins coexisting → new asset**, and accept the coarse mesh. There is no way to
+  have both today: an override can only produce one variant at a time, because every
+  variant would claim the same texture hash.
 
 ## Tests
 
