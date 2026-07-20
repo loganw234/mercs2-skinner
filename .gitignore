@@ -12,3 +12,6 @@ test/fixtures/bundle_model.bin
 test/fixtures/tex_*.png
 test/fixtures/ref.dds
 test/fixtures/ref_container.expected.bin
+
+# The community exporter. Not ours to redistribute, and 15 MB.
+tools/mercs2_workshop.exe

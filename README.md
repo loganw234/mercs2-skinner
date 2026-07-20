@@ -57,6 +57,46 @@ can be handed out.
 whose clothes you want, drop both export bundles in, and the tool dresses one in the other.
 See below — it is not the filename swap it looks like.
 
+## Get the whole roster in one go
+
+Exporting characters one at a time as you happen to want them is the slowest way to work:
+you cannot browse what exists, you cannot compare two of them, and the outfit swap needs
+two bundles before it can do anything. So do it once:
+
+```bat
+tools\extract_all.bat
+```
+
+About **85 characters and 600 MB**. Put `mercs2_workshop.exe` next to the script (or set
+`MERCS2_WORKSHOP`), and the bundles land in `C:\mercs2-skins\<character>\`. It is safe to
+re-run — anything already extracted is skipped, so an interrupted run resumes.
+
+Budget **20–30 minutes** and leave it going. Most characters take about two seconds, but the
+playable heroes carry far more animation and take over a minute each, so the average lands
+near fifteen. It is not stuck.
+
+```bat
+tools\extract_all.bat D:\m2cache              somewhere else
+tools\extract_all.bat C:\mercs2-skins _veh_   every vehicle instead
+tools\extract_all.bat C:\mercs2-skins _       everything (very large)
+```
+
+It reads the **base** game only (`--no-auto-patch`), so a cache built on a modded install
+does not quietly pick up other people's custom skins.
+
+Afterwards it indexes the cache, writing three files next to the bundles:
+
+| file | what it is |
+|---|---|
+| `INDEX.md` | every character by faction — clone-safe, sheets painted, real sheet sizes |
+| `index.json` | the same, machine-readable |
+| `sheets.csv` | one row per texture sheet, for sorting in a spreadsheet |
+
+The dimensions in there are the real ones, read from each bundle's own manifest. That is
+worth knowing because the shipped catalogue gets its sizes from `--tex-scan`, which covers
+only 3,777 of the game's 13,374 textures and leaves most sheets blank. A full extraction is
+the only complete source, and `index_bundles.py --refresh-donors` folds them back in.
+
 ## Swapping outfits between characters
 
 Chris in Allied fatigues, in four steps: export `pmc_hum_chris`, export `al_hum_starter01`,

@@ -1,0 +1,3 @@
+# .bat files MUST be CRLF: cmd.exe fails on LF-only batch files with a bogus
+# "not recognized as an internal or external command" pointing at the script itself.
+*.bat text eol=crlf
