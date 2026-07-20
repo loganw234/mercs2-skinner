@@ -65,4 +65,19 @@ export function recolour() {
   return `<div class="fig-pair fig-recolour"><div class="fig-slot">${person('clothes', 0.62)}</div></div>`;
 }
 
-export const ART = { variants: copies, replace: recolour, swap: swapPair };
+/** The bundled example skin: a stock figure becoming the glowing blueprint one. */
+export function tutorial() {
+  return `
+<div class="fig-pair fig-tron">
+  <div class="fig-slot"><div class="fig-cap">stock</div>${person('all', 0.55)}</div>
+  <div class="fig-arrow" aria-hidden="true">
+    <svg viewBox="0 0 40 30" width="30" height="22">
+      <path d="M4 15 H30 M23 8 L31 15 L23 22" fill="none" stroke="currentColor"
+            stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </div>
+  <div class="fig-slot fig-tron-lit"><div class="fig-cap">blueprint</div>${person('all', 0.55)}</div>
+</div>`;
+}
+
+export const ART = { variants: copies, replace: recolour, swap: swapPair, tutorial };

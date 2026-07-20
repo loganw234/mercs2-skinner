@@ -16,6 +16,13 @@ That last part is the whole design. Every step after the current one is visibly 
 a dropped folder is inspected and reported on rather than silently accepted, so there is no
 point where you are left holding a half-finished thing wondering whether it worked.
 
+**Never done this before?** Take **Try a finished example**. It walks a ready-made skin —
+a wireframe-and-neon repaint of the mechanic's overalls, bundled in
+[`samples/blueprint/`](samples/blueprint/) — all the way from the stock model to something
+you can wear in game, with no creative decisions to make anywhere in it. The point is to see
+the whole chain succeed once, so that when something breaks later you know it was your
+change and not your setup.
+
 ---
 
 ## Status: confirmed working in game

@@ -69,6 +69,23 @@
   .btn:disabled { opacity:.45; cursor:not-allowed; }
   input[type=text] { background:var(--panel2); color:var(--fg); border:1px solid var(--line);
                      border-radius:5px; padding:7px 9px; font:inherit; width:100%; }
+  input[type=text]:focus, select:focus { outline:none; border-color:var(--accent);
+                     box-shadow:0 0 0 2px rgba(96,165,250,.18); }
+  /* Native selects render with the OS chrome, which on Windows is a white box with a grey
+     chevron -- unmissable against a dark panel. appearance:none strips it; the chevron is
+     an inline data-URI SVG so nothing is fetched. */
+  select { appearance:none; -webkit-appearance:none; -moz-appearance:none;
+           background-color:var(--panel2); color:var(--fg); border:1px solid var(--line);
+           border-radius:5px; padding:8px 32px 8px 10px; font:inherit; width:100%;
+           cursor:pointer; line-height:1.4;
+           background-image:url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 L6 6.5 L11 1.5' fill='none' stroke='%2394a3b8' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+           background-repeat:no-repeat; background-position:right 11px center;
+           background-size:11px 8px; }
+  select:hover { border-color:var(--accent); background-color:#1b2942; }
+  /* The POPUP is drawn by the OS and barely styleable, but colouring the option list keeps
+     it dark on the browsers that do honour it, instead of flashing white. */
+  select option, select optgroup { background:var(--panel); color:var(--fg); }
+  select optgroup { color:var(--faint); font-style:normal; font-weight:600; }
   .chip { display:inline-block; padding:3px 9px; border-radius:5px; font-size:11px; margin:0 6px 6px 0;
           border:1px solid var(--line); background:var(--panel); color:var(--dim); }
   .chip.bad { color:var(--bad); border-color:#5a2020; }
@@ -215,6 +232,18 @@
   @media (max-width:760px){ .picker { grid-template-columns:1fr; } }
   .picker-fig { display:flex; flex-direction:column; align-items:center; gap:4px;
                 background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px 16px; }
+
+  /* ---- the bundled example ---- */
+  .fig-tron-lit .fig-cloth { fill:#e0399b; animation:tronglow 2.4s ease-in-out infinite; }
+  .fig-tron-lit .fig-skin { fill:#6b4f8a; }
+  @keyframes tronglow { 0%,100% { fill:#c0287f; } 50% { fill:#ff5cc0; } }
+  .sample-shots { display:flex; gap:12px; flex-wrap:wrap; margin:12px 0; }
+  .sample-shot { display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .sample-shot img { width:170px; height:170px; image-rendering:pixelated; border-radius:6px;
+                     border:1px solid var(--line); background:#07101d; display:block; }
+  ol.howto { margin:12px 0 0; padding-left:20px; color:var(--dim); font-size:12px; }
+  ol.howto li { margin-bottom:10px; line-height:1.5; }
+  ol.howto b { color:var(--fg); }
 </style>
 </head>
 <body>

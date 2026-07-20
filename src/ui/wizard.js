@@ -12,19 +12,23 @@
 // something outside the tool ends with the tool CHECKING their work rather than wishing
 // them luck.
 
-import { $, el, wireDrop } from './dom.js';
+import { el, wireDrop } from './dom.js';
 import { Rail, verdict } from './rail.js';
 import { ART, person } from './figure.js';
+import { SAMPLE } from '../sample.js';
 
 let CAT = null;
 let onPick = () => {};
 let onNeedBundle = null;
+let onApplySample = async () => { throw new Error('not wired'); };
 let rail = null;
 
 export function setCatalogue(c) { CAT = c; }
 export function onDonorPicked(fn) { onPick = fn; }
 /** app.js supplies the folder reader so the wizard can verify a drop before advancing. */
 export function setBundleLoader(fn) { onNeedBundle = fn; }
+/** app.js supplies the sample loader, since it owns image decoding and the edit state. */
+export function setSampleApplier(fn) { onApplySample = fn; }
 
 /**
  * Everything the tool can actually load.
@@ -68,6 +72,12 @@ const GOALS = {
     eg: 'For when you want Chris in Allied fatigues, and you do not want to paint anything yourself.',
     bodyQ: 'Whose body are you dressing?',
   },
+  tutorial: {
+    title: 'Try a finished example',
+    sub: 'Walk one ready-made skin all the way through, from the stock model to something you can wear in game.',
+    eg: 'For when you have never done this before and want to see it work once before you make anything.',
+    bodyQ: null,
+  },
 };
 
 const W = { goal: null, body: null, donor: null, outDir: 'C:\\mercs2-skins' };
@@ -91,7 +101,7 @@ export function buildWizard(root) {
 // ---------------------------------------------------------------- 1. goal
 function stepGoal(body) {
   const cards = el('div', 'cards');
-  for (const id of ['variants', 'replace', 'swap']) {
+  for (const id of ['variants', 'replace', 'swap', 'tutorial']) {
     const g = GOALS[id];
     const b = el('button', 'card' + (W.goal === id ? ' sel' : ''));
     b.type = 'button';
@@ -115,6 +125,21 @@ function stepGoal(body) {
 /** The remaining steps depend on the goal, so they are rebuilt whenever it changes. */
 function buildRest() {
   rail.truncateAfter('goal');
+
+  // The tutorial has no choices in it at all -- that is the point. The character is fixed,
+  // the skin is fixed, and the only thing asked of the user is to run one command and drag
+  // one folder back. Nothing to get wrong means nothing to explain.
+  if (W.goal === 'tutorial') {
+    W.body = allCharacters().find((c) => c.name === SAMPLE.character)
+      || { name: SAMPLE.character, sheets: [], blocks: 1 };
+    onPick(W.body, 'tutorial');
+    rail.add('export', `Get ${SAMPLE.character} out of the game`, stepExport, () => 'exported');
+    rail.add('drop', 'Load the folder', (b) => stepDrop(b, 'body'), () => (W.loadedBody || ''));
+    rail.add('apply', 'Put the example skin on it', stepApplySample, () => SAMPLE.name);
+    rail.add('install', 'Get it into the game', stepInstall, () => 'done');
+    return;
+  }
+
   rail.add('body', GOALS[W.goal].bodyQ, stepBody, () => W.body && W.body.name);
   if (W.goal === 'swap') {
     rail.add('donor', 'Whose clothes do you want?', stepDonor, () => W.donor && W.donor.name);
@@ -400,6 +425,105 @@ function stepDrop(body, which) {
     act.appendChild(go);
     out.appendChild(act);
   });
+}
+
+// ---------------------------------------------------------------- tutorial only
+function stepApplySample(body) {
+  body.appendChild(el('p', null,
+    'This is a finished skin that ships with the tool — a wireframe-and-neon repaint of the '
+    + "mechanic's overalls. Its upper and lower body sheets replace the stock ones; the head "
+    + 'and hair are deliberately left alone so he still reads as a person.'));
+
+  const shots = el('div', 'sample-shots');
+  for (const s of SAMPLE.sheets) {
+    const fig = el('div', 'sample-shot');
+    const img = el('img');
+    img.src = SAMPLE.dir + s.file;
+    img.alt = s.part;
+    img.loading = 'lazy';
+    fig.appendChild(img);
+    fig.appendChild(el('div', 'fig-cap', s.part));
+    shots.appendChild(fig);
+  }
+  body.appendChild(shots);
+
+  const out = el('div');
+  const act = el('div', 'step-actions');
+  const go = el('button', 'btn', 'Apply it →');
+  go.addEventListener('click', async () => {
+    go.disabled = true;
+    go.textContent = 'applying…';
+    out.innerHTML = '';
+    try {
+      const res = await onApplySample();
+      out.appendChild(verdict({
+        ok: true,
+        title: 'Applied',
+        lines: res.applied.map((a) => ({ k: a.part, v: `${a.name} · ${a.w}×${a.h}` })),
+      }));
+      rail.complete('apply');
+    } catch (e) {
+      go.disabled = false;
+      go.textContent = 'Apply it →';
+      out.appendChild(verdict({
+        ok: false,
+        title: 'Could not load the example images',
+        lines: [{ k: 'reason', v: (e && e.message) || 'fetch failed', ok: false }],
+        hint: 'The single-file offline build cannot read the samples folder. Use the hosted '
+          + 'version at skins.mercs2.tools for this walkthrough, or keep the samples folder '
+          + 'next to the HTML file.',
+      }));
+    }
+  });
+  act.appendChild(go);
+  body.appendChild(act);
+  body.appendChild(out);
+}
+
+function stepInstall(body) {
+  body.appendChild(el('p', null,
+    'The skin is loaded and the panels below now hold the real thing — the sheets, the 3D '
+    + 'preview and both export routes. Everything from here is the ordinary flow.'));
+
+  const ol = el('ol', 'howto');
+  for (const [t, d] of [
+    ['Look at it first',
+      'Scroll down to the 3D preview and turn the model around. What you see there is what '
+      + 'the game will show.'],
+    ['Download the new-asset kit',
+      'In Export, take “Download new-asset kit”. It contains the encoded textures and a '
+      + 'build script with every command already filled in.'],
+    ['Run the two commands in that script',
+      'They mint a new model and new textures under a new name and pack them into a patch '
+      + 'WAD. Your game files are not touched — this only ever adds.'],
+    ['Install the patch',
+      'Import the patch in the modkit, or if you have no other mods, drop it in as '
+      + 'data\\vz-patch.wad.'],
+  ]) {
+    const li = el('li');
+    li.appendChild(el('b', null, t));
+    li.appendChild(el('div', null, d));
+    ol.appendChild(li);
+  }
+  body.appendChild(ol);
+
+  body.appendChild(el('div', 'wz-q', 'Then wear it'));
+  const pre = el('pre');
+  pre.textContent = `Player.SetOutfit(Player.GetLocalCharacter(), "${SAMPLE.name}")`;
+  body.appendChild(pre);
+
+  // ⚠ This is the one genuinely dangerous instruction in the whole tool, so it is stated
+  // plainly rather than buried: an unresolvable outfit name does not fail softly.
+  body.appendChild(el('div', 'wz-warn',
+    '⚠ Only run that once the patch is actually installed and loaded. Asking the game for '
+    + 'an outfit name it cannot find crashes it to desktop — there is no soft failure. If '
+    + 'you renamed the skin, use your name here, exactly as you typed it.'));
+
+  const act = el('div', 'step-actions');
+  const done = el('button', 'btn', 'Got it');
+  done.addEventListener('click', () => rail.complete('install'));
+  act.appendChild(done);
+  body.appendChild(act);
 }
 
 export const wizardState = W;

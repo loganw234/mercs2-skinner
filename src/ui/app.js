@@ -7,7 +7,8 @@ import { readBundle, sortBundleFiles, MISSING_HINT } from '../bundle.js';
 import { buildUcfxTexture, isPow2 } from '../texture.js';
 import { planExport, buildCommands, buildModkitMod, preflight, hex8, sanitizeAssetName } from '../export.js';
 import { setNameSource, nameForHash } from '../names.js';
-import { setCatalogue, buildWizard, onDonorPicked, setBundleLoader } from './wizard.js';
+import { setCatalogue, buildWizard, onDonorPicked, setBundleLoader, setSampleApplier } from './wizard.js';
+import { SAMPLE } from '../sample.js';
 import { runSwap } from './swap.js';
 import { $, el } from './dom.js';
 import { bodySheets } from '../transfer.js';
@@ -62,6 +63,8 @@ export async function boot() {
       },
     };
   });
+
+  setSampleApplier(applySample);
 
   preview = new Preview($('#preview'));
   if (!preview.ok) $('#preview-note').textContent = 'WebGL unavailable — the 3D preview is disabled.';
@@ -126,15 +129,47 @@ function adopt(bundle, images, sorted) {
   $('#bundle-name').textContent =
     `${S.bundle.name} — ${S.bundle.textures.length} textures, ${S.bundle.prims.length} draw groups` +
     (S.bundle.skinned ? ', skinned' : '');
-  // On a swap the editing panels stay shut until the outfit has actually been applied --
-  // there is nothing useful to look at in between, and an empty half-built page is exactly
-  // the "now what?" moment this flow exists to remove.
-  const swapping = S.wizardGoal === 'swap';
-  $('#step-edit').hidden = swapping;
-  $('#step-export').hidden = swapping;
+  // On a swap or the walkthrough the editing panels stay shut until the skin has actually
+  // been applied -- there is nothing useful to look at in between, and an empty half-built
+  // page is exactly the "now what?" moment this flow exists to remove.
+  const pending = S.wizardGoal === 'swap' || S.wizardGoal === 'tutorial';
+  $('#step-edit').hidden = pending;
+  $('#step-export').hidden = pending;
   select(S.bundle.textures[0]?.hash);
   renderList();
   status('');
+}
+
+/** The walkthrough: drop the bundled example skin onto the sheets it was painted for.
+ *
+ *  Targets are matched by texture HASH rather than by name or by slot order. The sheet a
+ *  skin was painted against is the only thing that makes it correct, and a hash is the one
+ *  identifier that cannot drift. */
+async function applySample() {
+  if (!S.bundle) throw new Error('Load the character folder first.');
+  const applied = [];
+  for (const s of SAMPLE.sheets) {
+    const rec = S.textures.get(s.hash);
+    if (!rec) throw new Error(`This bundle has no sheet ${s.hash} — is it ${SAMPLE.character}?`);
+    const res = await fetch(SAMPLE.dir + s.file);
+    if (!res.ok) throw new Error(`${res.status} fetching ${s.file}`);
+    const img = await createImageBitmap(await res.blob());
+    const cv = document.createElement('canvas');
+    // Keep the ORIGINAL sheet size: the texture pool caps on cells, not pixels.
+    cv.width = rec.width; cv.height = rec.height;
+    cv.getContext('2d').drawImage(img, 0, 0, rec.width, rec.height);
+    rec.edited = cv.getContext('2d').getImageData(0, 0, rec.width, rec.height);
+    const tex = S.bundle.textures.find((t) => t.hash === s.hash);
+    applied.push({ part: s.part, name: (tex && tex.name) || s.hash, w: rec.width, h: rec.height });
+  }
+  S.skinName = SAMPLE.name;
+  $('#skin-name').value = S.skinName;
+  select(SAMPLE.sheets[0].hash);
+  drawTexture(); pushToPreview(); renderExport(); renderList();
+  $('#step-edit').hidden = false;
+  $('#step-export').hidden = false;
+  note(`Example skin "${SAMPLE.name}" applied to ${applied.length} sheets.`);
+  return { applied };
 }
 
 /** Second half of a swap: re-map the donor's clothing onto the body already loaded. */
