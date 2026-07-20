@@ -33,6 +33,7 @@ export function buildWizard(root) {
   for (const [id, title, sub] of [
     ['variants', 'Add new outfits', 'Several skins that coexist with the original. Nothing in the game changes unless you wear one.'],
     ['replace', 'Change how someone looks', "Replace a character's own textures. Everyone wearing them changes."],
+    ['swap', 'Wear someone else\'s outfit', 'Put another character\'s clothing onto this one. No painting at all — the tool does the work.'],
   ]) {
     const b = el('button', 'wz-opt');
     b.dataset.goal = id;
@@ -51,10 +52,20 @@ export function buildWizard(root) {
     const g = root.dataset.goal;
     for (const b of goal.querySelectorAll('.wz-opt')) b.classList.toggle('sel', b.dataset.goal === g);
     if (!g) { rest.innerHTML = ''; return; }
-    const list = g === 'variants' ? chars.filter((c) => c.kind === 'clone') : chars;
+    // Both "add outfits" and "wear someone else's" put the result on a character's own
+    // model, so both need a character that HAS one.
+    const list = g === 'replace' ? chars : chars.filter((c) => c.kind === 'clone');
 
     rest.innerHTML = '';
-    rest.appendChild(el('div', 'wz-q', 'Which character?'));
+    rest.appendChild(el('div', 'wz-q',
+      g === 'swap' ? 'Whose BODY are you dressing?' : 'Which character?'));
+
+    if (g === 'swap') {
+      rest.appendChild(el('div', 'wz-note',
+        'Pick the character you want to BE — their body, face and build. You will pick whose '
+        + 'clothes they wear in a moment. The two do not need matching texture layouts: the '
+        + 'tool re-maps the clothing through the 3D body, so any pair works.'));
+    }
 
     if (g === 'variants') {
       const safe = list.filter((c) => c.blocks === 1).length;
@@ -126,7 +137,9 @@ function renderDetail(root, c, goal) {
   const sheets = c.sheets.map((s) => `${s.part}${s.size ? ' ' + s.size : ''}`).join(' · ');
   root.appendChild(el('div', 'wz-sheets', `Sheets: ${sheets}`));
 
-  if (goal === 'variants') {
+  // Clone-safety matters for the swap too: a swapped outfit shipped as a NEW asset clones
+  // the body's model, so a two-block body flattens exactly as it would for a variant.
+  if (goal === 'variants' || goal === 'swap') {
     if (c.blocks === 1) {
       root.appendChild(el('div', 'wz-ok',
         '✓ Clone-safe. This character keeps all its geometry in one place, so a copy of it '
@@ -222,15 +235,30 @@ function renderDetail(root, c, goal) {
 
   const upd = () => {
     const dir = (out.value || 'C:\\mercs2-skins').replace(/[\\/]+$/, '');
-    pre.textContent = `mercs2_workshop --export-bundle ${c.name} --out "${dir}"`;
+    pre.textContent = goal === 'swap'
+      // The swap needs TWO bundles, and finding that out one command at a time is the most
+      // annoying possible way to learn it. Emit both, with the second left to fill in.
+      ? `mercs2_workshop --export-bundle ${c.name} --out "${dir}"\n`
+        + `mercs2_workshop --export-bundle <the_character_whose_clothes_you_want> --out "${dir}"`
+      : `mercs2_workshop --export-bundle ${c.name} --out "${dir}"`;
   };
   out.addEventListener('input', upd);
   upd();
 
-  root.appendChild(el('div', 'wz-note',
-    `That writes ${'"'}${'{'}folder${'}'}\\${c.name}\\${'"'} containing manifest.json, model.gltf, model.bin, `
-    + 'a textures folder and a raw folder. Drag that whole character folder onto the drop '
-    + 'zone below — not the individual files.'));
+  root.appendChild(el('div', 'wz-note', goal === 'swap'
+    ? `Run it twice — once for ${c.name} and once for whoever owns the outfit. Each writes its `
+      + 'own folder containing manifest.json, model.gltf, model.bin, textures and raw. Drop '
+      + `${c.name}'s folder in step 1, then the other one in step 1b.`
+    : `That writes ${'"'}${'{'}folder${'}'}\\${c.name}\\${'"'} containing manifest.json, model.gltf, model.bin, `
+      + 'a textures folder and a raw folder. Drag that whole character folder onto the drop '
+      + 'zone below — not the individual files.'));
+
+  if (goal === 'swap') {
+    root.appendChild(el('div', 'wz-note',
+      'Any character with its own textures can be the donor, including ones that cannot be '
+      + 'cloned — you are only borrowing their artwork, not their model. So the whole roster '
+      + 'is available as a wardrobe.'));
+  }
 
   // --- troubleshooting ---
   const tro = el('details', 'wz-tro');
@@ -254,8 +282,14 @@ function renderDetail(root, c, goal) {
       'The character has no textures of its own — it borrows another character\'s. Nothing '
       + 'to reskin there; pick a different one.'],
     ['My skin loaded but the face looks flattened',
-      'You cloned a two-block character. Only the nine listed under "Add new outfits" keep '
-      + 'their detail when cloned. See docs/LOD-CHAIN.md.'],
+      'You cloned a two-block character. 38 of the 85 characters with a model are '
+      + 'single-block and keep full detail when cloned — those are the ones marked ✓. '
+      + 'See docs/LOD-CHAIN.md.'],
+    ['The swapped outfit looks smeared in places',
+      'The donor has no counterpart for part of that body — usually gear one character '
+      + 'carries and the other does not, like a backpack or webbing. Those areas take the '
+      + 'nearest colour available. The fit percentages in step 1b tell you which sheets are '
+      + 'affected; a donor with a similar build fixes it.'],
     ['The game crashed to desktop when I wore it',
       'The name did not resolve — the asset is not actually in your patch. Check the patch '
       + 'merged correctly. There is no soft failure for a missing model.'],

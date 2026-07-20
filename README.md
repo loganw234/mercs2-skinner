@@ -53,7 +53,58 @@ filled flat and coloured by the body part that drives it, so a shape reads as "r
 forearm" rather than "some blob". They contain no game artwork, which is exactly why they
 can be handed out.
 
+**Wear someone else's outfit, without painting anything.** Pick whose body you want and
+whose clothes you want, drop both export bundles in, and the tool dresses one in the other.
+See below — it is not the filename swap it looks like.
+
+## Swapping outfits between characters
+
+Chris in Allied fatigues, in four steps: export `pmc_hum_chris`, export `al_hum_starter01`,
+drop them in, export. No image editor involved.
+
+The obvious way to build this is to copy the donor's sheet over the target's and rename it.
+**That does not work**, and it is worth being precise about why, because the failure is not
+obvious from looking at one sheet. Characters do not share UV layouts. Measured across 40
+exported characters, comparing which *body part* each overlapping texel actually paints:
+
+| sheet | median agreement | pairs above 0.85 |
+|---|---|---|
+| upper body | 0.21 | 1 of 276 |
+| lower body | 0.29 | 4 of 190 |
+| head | 0.71 | 38 of 465 |
+
+Chris and the Allied soldier agree on **13%** of their upper-body texels. Renaming one sheet
+to the other paints sleeves onto thighs. Only same-family variants (`chris` ↔ `chris_v4`)
+line up well enough for a copy.
+
+What every character *does* share is the skeleton and the bind pose. So the swap goes
+through 3D instead of through UV coincidence:
+
+```
+for each texel of the target's sheet
+  → its 3D position on the target body     (barycentric inside the target's UV triangle)
+  → the nearest point on the donor body    (spatial grid over ~74k donor surface samples)
+  → that point's UV on the donor           → sample the donor's texture
+```
+
+The donor's clothing comes out re-laid-out in the target's own UV space, which is what the
+engine reads. On `pmc_hum_chris ← al_hum_starter01` the median correspondence error is
+**0.56% of body height**, no texel is left unmapped, and the whole character takes about two
+seconds.
+
+The tool reports the fit per sheet. A poor number means the donor has no counterpart for
+part of that body — gear one character carries and the other does not — and those areas take
+the nearest colour available rather than something correct.
+
+**It does not rescale, and that is deliberate.** An earlier version height-matched the two
+bodies, which made the correspondence measurably *worse* (0.0098 → 0.0159 median on that
+same pair). Two characters on a shared rig already occupy the same space; the apparent 6%
+height difference was stray geometry dipping below the floor dragging a raw bounding box
+with it. Heights are now measured with trimmed percentiles and only *reported*.
+
 ## Two ways out
+
+Both paths take a swapped outfit exactly like a painted one.
 
 | | **A · Modkit mod** | **B · New asset** |
 |---|---|---|
@@ -83,11 +134,13 @@ or `65535` for none. Cloning copies one block, so:
 * **Two-block characters lose their detail rungs** and render their coarsest tier at every
   distance — a visibly flattened face.
 
-The tool's character picker knows which is which and only offers the safe ones for new
-outfits. Full detail in [docs/LOD-CHAIN.md](docs/LOD-CHAIN.md).
+Of the **85 characters with a model of their own, 38 are single-block** and clone at full
+detail. The picker lists those first and marks them ✓; the other 47 are still offered, with
+what cloning costs them spelled out. Full detail in [docs/LOD-CHAIN.md](docs/LOD-CHAIN.md).
 
-Everything else can still be **reskinned in place**, which never clones anything and so is
-always geometrically correct.
+A further **67 characters exist only as shared sub-entries** with no model row of their own.
+They can never be cloned, but they can be **reskinned in place**, which never clones anything
+and so is always geometrically correct. 152 characters in total.
 
 ## How many skins can you actually have
 
@@ -111,7 +164,7 @@ Nobody is going to run out.
 npm test
 ```
 
-95 assertions. The core ones are parity: `src/texture.js` is a port of the community
+123 assertions. The core ones are parity: `src/texture.js` is a port of the community
 project's `dds_to_ucfx_texture.py`, so **that script is the specification**, not this port.
 
 - **UCFX container byte-identical** to the reference encoder
@@ -122,6 +175,10 @@ project's `dds_to_ucfx_texture.py`, so **that script is the specification**, not
 - UV extraction: finest LOD only, UVs inside `[0,1]`, index buffers in range
 - recolour: hue selection separates fabric from skin, shading survives a shift, and the
   selection still resolves after a shift is applied
+- outfit transfer, on a pair built to defeat a naive copy — same body, **mirrored** UV
+  layouts. The transfer scores **97.5%** of texels on the correct body part; a filename
+  swap on that same pair scores **0%**. The spatial grid is also checked against brute
+  force, since a wrong search bound degrades quality silently instead of throwing.
 
 The parity fixture is **synthetic** — a procedural image built to be hostile to a block
 compressor — so a fresh clone runs full byte-parity with no extracted game art committed.
@@ -156,9 +213,15 @@ Not affiliated with or endorsed by EA or Pandemic Studios.
   only the DXT1 diffuse path is implemented here. Their `nm_to_ucfx_dxt5nm.py` handles it.
 - **No freehand painting** — the recolour covers hue/saturation/brightness, anything else
   round-trips through your own image editor.
-- **Two-block characters cannot host new outfits.** Fixing it upstream is small: let the
+- **Two-block characters lose detail when cloned.** Fixing it upstream is small: let the
   injector write `packed_block_ref = (resident << 16) | lod_block` instead of forcing
   `65535`. `AsetEntry` already exposes it.
+- **A swapped outfit has not yet been seen in game.** The transfer is verified numerically
+  and against a synthetic worst case, and the export path it feeds is the same one that put
+  256 skins on screen — but this particular combination has not been loaded yet.
+- **The swap copies colour, not geometry.** Clothing that stands off the body — a helmet,
+  a backpack, loose webbing — exists as *shape* on the donor, and shape is not what moves.
+  You get its colours projected onto whatever the target has in that space.
 - **Some characters cannot be exported at all** — they exist only as shared sub-entries with
   no model row of their own, so there is nothing to pull out. `pmc_hum_jennifer` is the
   well-known case.

@@ -8,7 +8,8 @@ import { buildUcfxTexture, isPow2 } from '../texture.js';
 import { planExport, buildCommands, buildModkitMod, preflight, hex8, sanitizeAssetName } from '../export.js';
 import { setNameSource, nameForHash } from '../names.js';
 import { setCatalogue, buildWizard, onDonorPicked } from './wizard.js';
-import { $, el } from './dom.js';
+import { initSwap, setSwapVisible } from './swap.js';
+import { $, el, wireDrop } from './dom.js';
 import { makeZip } from '../zip.js';
 import { buildMask, applyShift, previewMask, maskCount, cloneImage, rgbToHsv, hsvToRgb } from '../recolor.js';
 import { Preview } from '../preview.js';
@@ -42,20 +43,22 @@ export async function boot() {
       S.skinName = sanitizeAssetName(c.name + '_custom');
       if ($('#skin-name')) $('#skin-name').value = S.skinName;
     }
+    setSwapVisible(goal === 'swap' && !!S.bundle, S.bundle && S.bundle.name);
+  });
+
+  initSwap({
+    parseFolder,
+    getTarget: () => S.bundle,
+    getSizes: () => new Map([...S.textures].map(([h, r]) => [h, { width: r.width, height: r.height }])),
+    onApply: applyTransfer,
+    status,
+    fail,
   });
 
   preview = new Preview($('#preview'));
   if (!preview.ok) $('#preview-note').textContent = 'WebGL unavailable — the 3D preview is disabled.';
 
-  const input = $('#bundle-input');
-  input.addEventListener('change', (e) => load([...e.target.files]).catch(fail));
-  $('#drop').addEventListener('dragover', (e) => { e.preventDefault(); $('#drop').classList.add('over'); });
-  $('#drop').addEventListener('dragleave', () => $('#drop').classList.remove('over'));
-  $('#drop').addEventListener('drop', async (e) => {
-    e.preventDefault(); $('#drop').classList.remove('over');
-    const files = await filesFromDrop(e.dataTransfer);
-    load(files).catch(fail);
-  });
+  wireDrop($('#drop'), $('#bundle-input'), (files) => load(files).catch(fail));
   $('#show-uv').addEventListener('change', (e) => { S.showUV = e.target.checked; drawTexture(); });
   $('#replace-input').addEventListener('change', (e) => replaceTexture(e.target.files[0]).catch(fail));
   $('#skin-name').addEventListener('input', (e) => { S.skinName = e.target.value; renderExport(); });
@@ -71,30 +74,9 @@ export async function boot() {
   status('Drop an export-bundle folder to begin.');
 }
 
-/** Directory drops arrive as entries, not files. */
-async function filesFromDrop(dt) {
-  const out = [];
-  const walk = async (entry, path) => {
-    if (entry.isFile) {
-      const f = await new Promise((res, rej) => entry.file(res, rej));
-      Object.defineProperty(f, 'webkitRelativePath', { value: path + f.name, configurable: true });
-      out.push(f);
-    } else if (entry.isDirectory) {
-      const rd = entry.createReader();
-      for (;;) {
-        const batch = await new Promise((res, rej) => rd.readEntries(res, rej));
-        if (!batch.length) break;
-        for (const e of batch) await walk(e, path + entry.name + '/');
-      }
-    }
-  };
-  const roots = [...dt.items].map((i) => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
-  if (roots.length) { for (const r of roots) await walk(r, ''); return out; }
-  return [...dt.files];
-}
-
-async function load(files) {
-  status('reading bundle…');
+/** Read a dropped export-bundle folder into a bundle plus its decoded textures.
+ *  Shared with the outfit swap, which loads a SECOND bundle exactly the same way. */
+async function parseFolder(files) {
   const sorted = sortBundleFiles(files);
   if (!sorted.manifest || !sorted.gltf || !sorted.bin) {
     throw new Error('That is not a complete export bundle.\n' + MISSING_HINT +
@@ -104,11 +86,10 @@ async function load(files) {
   const manifest = JSON.parse(await sorted.manifest.text());
   const gltf = JSON.parse(await sorted.gltf.text());
   const bin = await sorted.bin.arrayBuffer();
-  S.bundle = readBundle({ manifest, gltf, bin });
-  S.files = sorted;
-  S.textures.clear();
+  const bundle = readBundle({ manifest, gltf, bin });
 
-  for (const tex of S.bundle.textures) {
+  const images = new Map();
+  for (const tex of bundle.textures) {
     const base = (tex.file || '').split('/').pop().toLowerCase();
     const f = sorted.textures.get(base);
     if (!f) continue;
@@ -116,9 +97,20 @@ async function load(files) {
     const cv = document.createElement('canvas');
     cv.width = img.width; cv.height = img.height;
     cv.getContext('2d').drawImage(img, 0, 0);
-    S.textures.set(tex.hash, {
-      original: cv.getContext('2d').getImageData(0, 0, img.width, img.height),
-      edited: null, width: img.width, height: img.height,
+    images.set(tex.hash, cv.getContext('2d').getImageData(0, 0, img.width, img.height));
+  }
+  return { bundle, images, sorted };
+}
+
+async function load(files) {
+  status('reading bundle…');
+  const { bundle, images, sorted } = await parseFolder(files);
+  S.bundle = bundle;
+  S.files = sorted;
+  S.textures.clear();
+  for (const [hash, img] of images) {
+    S.textures.set(hash, {
+      original: img, edited: null, width: img.width, height: img.height,
     });
   }
   S.skinName = sanitizeAssetName(S.bundle.name + '_custom');
@@ -128,9 +120,26 @@ async function load(files) {
     (S.bundle.skinned ? ', skinned' : '');
   $('#step-edit').hidden = false;
   $('#step-export').hidden = false;
+  setSwapVisible(S.wizardGoal === 'swap', S.bundle.name);
   select(S.bundle.textures[0]?.hash);
   renderList();
   status('');
+}
+
+/** Adopt the re-mapped sheets as edits, so the existing export machinery — preflight,
+ *  modkit mod, new-asset kit, 3D preview — applies unchanged. */
+function applyTransfer(results) {
+  let n = 0;
+  for (const [hash, r] of results) {
+    const rec = S.textures.get(hash);
+    if (!rec) continue;
+    rec.edited = r.image;
+    n++;
+  }
+  if (!n) return fail(new Error('The swap produced no sheets that match this bundle.'));
+  select(S.bundle.textures.find((t) => results.has(t.hash))?.hash || S.selected);
+  drawTexture(); pushToPreview(); renderExport(); renderList();
+  note(`${n} sheet(s) replaced with the re-mapped outfit. Revert any one of them from step 2.`);
 }
 
 function renderList() {
