@@ -23,6 +23,13 @@ you can wear in game, with no creative decisions to make anywhere in it. The poi
 the whole chain succeed once, so that when something breaks later you know it was your
 change and not your setup.
 
+It does hand you one dial, though: a **hue slider** on the finished skin. The example is
+neon on near-black, which is the ideal thing to rotate — the wireframe, the grid and the
+glow all turn together while the blacks and the white hotspots stay put, so there is no way
+to make it look broken. The sheets, the 3D view and the swatches all update live. A
+walkthrough where you only press Next teaches the steps but leaves nothing of yours in the
+result; this way the first thing you ship is still something you chose.
+
 ---
 
 ## Status: confirmed working in game

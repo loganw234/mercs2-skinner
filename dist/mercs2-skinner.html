@@ -256,8 +256,15 @@
   @keyframes tronglow { 0%,100% { fill:#c0287f; } 50% { fill:#ff5cc0; } }
   .sample-shots { display:flex; gap:12px; flex-wrap:wrap; margin:12px 0; }
   .sample-shot { display:flex; flex-direction:column; align-items:center; gap:4px; }
-  .sample-shot img { width:170px; height:170px; image-rendering:pixelated; border-radius:6px;
+  .sample-shot img, .sample-shot canvas {
+                     width:170px; height:170px; image-rendering:pixelated; border-radius:6px;
                      border:1px solid var(--line); background:#07101d; display:block; }
+  .tint .sl { max-width:420px; margin-top:6px; }
+  .swatches { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .tint-swatch { width:30px; height:30px; border-radius:50%; border:2px solid transparent;
+            cursor:pointer; padding:0; box-shadow:0 0 0 1px var(--line); transition:.12s; }
+  .tint-swatch:hover { transform:scale(1.12); }
+  .tint-swatch.sel { border-color:var(--fg); box-shadow:0 0 0 1px var(--accent); }
   ol.howto { margin:12px 0 0; padding-left:20px; color:var(--dim); font-size:12px; }
   ol.howto li { margin-bottom:10px; line-height:1.5; }
   ol.howto b { color:var(--fg); }
@@ -1409,8 +1416,15 @@ function readDdsRgb(buf) {
   @keyframes tronglow { 0%,100% { fill:#c0287f; } 50% { fill:#ff5cc0; } }
   .sample-shots { display:flex; gap:12px; flex-wrap:wrap; margin:12px 0; }
   .sample-shot { display:flex; flex-direction:column; align-items:center; gap:4px; }
-  .sample-shot img { width:170px; height:170px; image-rendering:pixelated; border-radius:6px;
+  .sample-shot img, .sample-shot canvas {
+                     width:170px; height:170px; image-rendering:pixelated; border-radius:6px;
                      border:1px solid var(--line); background:#07101d; display:block; }
+  .tint .sl { max-width:420px; margin-top:6px; }
+  .swatches { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .tint-swatch { width:30px; height:30px; border-radius:50%; border:2px solid transparent;
+            cursor:pointer; padding:0; box-shadow:0 0 0 1px var(--line); transition:.12s; }
+  .tint-swatch:hover { transform:scale(1.12); }
+  .tint-swatch.sel { border-color:var(--fg); box-shadow:0 0 0 1px var(--accent); }
   ol.howto { margin:12px 0 0; padding-left:20px; color:var(--dim); font-size:12px; }
   ol.howto li { margin-bottom:10px; line-height:1.5; }
   ol.howto b { color:var(--fg); }
@@ -1813,6 +1827,139 @@ const SAMPLE = {
     { hash: '0x98529145', file: 'pmc_hum_mechanic_ub.png', part: 'upper body' },
     { hash: '0x87F9725E', file: 'pmc_hum_mechanic_lb.png', part: 'lower body' },
   ],
+};
+
+
+// ===== src/recolor.js =====
+// In-tool recolour: pick a colour, shift everything like it.
+//
+// This is the "I just want the jacket in red" path. It exists because forcing a round trip
+// through an image editor for a hue swap is absurd overhead for the most common edit
+// anyone will make.
+//
+// Selection is by HUE PROXIMITY rather than RGB distance. A garment in shadow and the same
+// garment in light are far apart in RGB but nearly identical in hue, so an RGB threshold
+// either misses the shaded folds or swallows the skin next to it. Hue distance selects the
+// whole garment across its full range of lighting, which is exactly what a recolour wants.
+
+function rgbToHsv(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0;
+  if (d) {
+    if (mx === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+    else if (mx === g) h = ((b - r) / d + 2) / 6;
+    else h = ((r - g) / d + 4) / 6;
+  }
+  return [h, mx ? d / mx : 0, mx];
+}
+
+function hsvToRgb(h, s, v) {
+  h = ((h % 1) + 1) % 1;
+  const i = Math.floor(h * 6), f = h * 6 - i;
+  const p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
+  let r, g, b;
+  switch (i % 6) {
+    case 0: r = v; g = t; b = p; break;
+    case 1: r = q; g = v; b = p; break;
+    case 2: r = p; g = v; b = t; break;
+    case 3: r = p; g = q; b = v; break;
+    case 4: r = t; g = p; b = v; break;
+    default: r = v; g = p; b = q;
+  }
+  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+}
+
+/** Shortest distance between two hues on the 0..1 wheel. */
+const hueDist = (a, b) => {
+  const d = Math.abs(a - b) % 1;
+  return d > 0.5 ? 1 - d : d;
+};
+
+/**
+ * Which pixels count as "the thing you clicked".
+ * @param {ImageData} img
+ * @param {[number,number,number]} target  picked RGB
+ * @param {{tolerance:number, minSat:number}} o
+ *        tolerance 0..1 as a fraction of the hue wheel (0.055 ~ 20 degrees); minSat guards
+ *        against grey pixels, whose hue is meaningless and which would otherwise all match
+ *        at once.
+ *
+ *        The default is deliberately tight. Red fabric and tan skin sit only ~17 degrees
+ *        apart, so a generous tolerance quietly recolours the wearer along with the
+ *        garment -- which is why the UI shows the live selection rather than trusting a
+ *        number.
+ * @returns {Uint8Array} 1 per selected pixel
+ */
+function buildMask(img, target, { tolerance = 0.055, minSat = 0.15 } = {}) {
+  const [th, ts] = rgbToHsv(target[0], target[1], target[2]);
+  const n = img.width * img.height;
+  const mask = new Uint8Array(n);
+  const d = img.data;
+  // A greyish target cannot be matched by hue at all, so fall back to RGB proximity --
+  // otherwise picking a white shirt selects the entire image.
+  const greyTarget = ts < minSat;
+  for (let i = 0; i < n; i++) {
+    const r = d[i * 4], g = d[i * 4 + 1], b = d[i * 4 + 2];
+    if (greyTarget) {
+      const dr = r - target[0], dg = g - target[1], db = b - target[2];
+      if (Math.sqrt(dr * dr + dg * dg + db * db) <= tolerance * 441) mask[i] = 1;
+      continue;
+    }
+    const [h, s] = rgbToHsv(r, g, b);
+    if (s >= minSat && hueDist(h, th) <= tolerance) mask[i] = 1;
+  }
+  return mask;
+}
+
+/**
+ * Apply a shift to the masked pixels.
+ * Saturation and value are MULTIPLIED, not replaced, so shading survives -- the whole
+ * reason a recolour looks like fabric rather than a paint bucket.
+ * @param {ImageData} src
+ * @param {Uint8Array} mask
+ * @param {{hue:number, sat:number, val:number}} o  hue in degrees, sat/val as multipliers
+ * @returns {ImageData}
+ */
+function applyShift(src, mask, { hue = 0, sat = 1, val = 1 } = {}) {
+  const out = cloneImage(src);
+  const d = out.data;
+  const dh = hue / 360;
+  for (let i = 0; i < mask.length; i++) {
+    if (!mask[i]) continue;
+    const [h, s, v] = rgbToHsv(d[i * 4], d[i * 4 + 1], d[i * 4 + 2]);
+    const [r, g, b] = hsvToRgb(h + dh, Math.min(1, s * sat), Math.min(1, v * val));
+    d[i * 4] = r; d[i * 4 + 1] = g; d[i * 4 + 2] = b;
+  }
+  return out;
+}
+
+/** Tint the unselected pixels down so the selection is obvious while adjusting. */
+function previewMask(src, mask) {
+  const out = cloneImage(src);
+  const d = out.data;
+  for (let i = 0; i < mask.length; i++) {
+    if (mask[i]) continue;
+    d[i * 4] = d[i * 4] * 0.25 + 10;
+    d[i * 4 + 1] = d[i * 4 + 1] * 0.25 + 12;
+    d[i * 4 + 2] = d[i * 4 + 2] * 0.25 + 20;
+  }
+  return out;
+}
+
+/** Copy an image, as an ImageData in a browser and a plain object in node -- the module
+ *  stays unit-testable without a DOM. */
+function cloneImage(src) {
+  const data = new Uint8ClampedArray(src.data);
+  return typeof ImageData === 'function'
+    ? new ImageData(data, src.width, src.height)
+    : { data, width: src.width, height: src.height };
+}
+
+const maskCount = (mask) => {
+  let n = 0;
+  for (let i = 0; i < mask.length; i++) n += mask[i];
+  return n;
 };
 
 
@@ -2329,13 +2476,19 @@ function stepApplySample(body) {
     go.textContent = 'applying…';
     out.innerHTML = '';
     try {
-      const res = await onApplySample();
+      const res = await onApplySample(0);
       out.appendChild(verdict({
         ok: true,
         title: 'Applied',
         lines: res.applied.map((a) => ({ k: a.part, v: `${a.name} · ${a.w}×${a.h}` })),
       }));
-      rail.complete('apply');
+      // ★ The step stays OPEN. rail.complete() redraws every step from scratch, which
+      // would throw away the tint controls the moment they appeared -- and more to the
+      // point, this is the one place in the tool where there is something to play with,
+      // so it should not close itself the instant it opens.
+      act.remove();
+      shots.remove();
+      body.appendChild(tintControls(res.previews));
     } catch (e) {
       go.disabled = false;
       go.textContent = 'Apply it →';
@@ -2352,6 +2505,117 @@ function stepApplySample(body) {
   act.appendChild(go);
   body.appendChild(act);
   body.appendChild(out);
+}
+
+/**
+ * Make the example theirs before they ship it.
+ *
+ * A walkthrough where you only press Next teaches the steps but leaves nothing of yours in
+ * the result. This skin is neon on near-black, which is the ideal thing to rotate: one
+ * slider moves the whole palette coherently and there is no way to make it look broken. So
+ * the first thing anyone ships is still something they chose.
+ */
+function tintControls(previews) {
+  const wrap = el('div', 'tint');
+
+  const shots = el('div', 'sample-shots');
+  const canvases = [];
+  for (const p of previews) {
+    const fig = el('div', 'sample-shot');
+    const cv = el('canvas');
+    cv.width = p.image.width;
+    cv.height = p.image.height;
+    cv.getContext('2d').putImageData(p.image, 0, 0);
+    canvases.push(cv);
+    fig.appendChild(cv);
+    fig.appendChild(el('div', 'fig-cap', p.part));
+    shots.appendChild(fig);
+  }
+  wrap.appendChild(shots);
+
+  wrap.appendChild(el('div', 'wz-q', 'Make it yours'));
+  wrap.appendChild(el('div', 'wz-note',
+    'The example is mostly pink. Drag this and the whole palette turns with it — wireframe, '
+    + 'grid and glow together — while the blacks and the white hotspots stay put. Everything '
+    + 'below updates live, including the 3D view.'));
+
+  let hue = 0;
+
+  // Coalescing throttle: one shift in flight, the newest requested value queued behind it,
+  // and the queue is always drained. Deliberately NOT requestAnimationFrame -- rAF is for
+  // painting and a browser is entitled never to run it in a hidden tab, which would leave
+  // the slider's last position silently unapplied while the UI claimed otherwise.
+  let running = false;
+  let queued = null;
+  const apply = async () => {
+    if (running) { queued = hue; return; }
+    running = true;
+    try {
+      let h = hue;
+      for (;;) {
+        queued = null;
+        const res = await onApplySample(h);
+        res.previews.forEach((p, i) => {
+          canvases[i].getContext('2d').putImageData(p.image, 0, 0);
+        });
+        if (queued === null) break;
+        h = queued;
+      }
+    } finally {
+      running = false;
+    }
+  };
+
+  const row = el('label', 'sl');
+  row.appendChild(el('span', null, 'hue'));
+  const range = el('input');
+  range.type = 'range';
+  range.min = '0';
+  range.max = '359';
+  range.value = '0';
+  row.appendChild(range);
+  const readout = el('b', null, '0°');
+  row.appendChild(readout);
+  wrap.appendChild(row);
+
+  // Swatches are rendered by shifting the skin's OWN accent colour, so each one previews
+  // the real result rather than an approximation someone had to name.
+  // `tint-swatch`, not `swatch`: the recolour panel already owns `.swatch` for its picked
+  // colour chip, and reusing it silently restyled that instead.
+  const sw = el('div', 'swatches');
+  const ACCENT = [224, 57, 155];
+  const [ah, as, av] = rgbToHsv(ACCENT[0], ACCENT[1], ACCENT[2]);
+  for (const h of [0, 40, 90, 150, 200, 250, 300]) {
+    const b = el('button', 'tint-swatch');
+    b.type = 'button';
+    b.title = h ? `+${h}°` : 'the original';
+    b.style.background = `rgb(${hsvToRgb(ah + h / 360, as, av).join(',')})`;
+    b.addEventListener('click', () => {
+      hue = h;
+      range.value = String(h);
+      readout.textContent = `${h}°`;
+      for (const o of sw.children) o.classList.toggle('sel', o === b);
+      apply();
+    });
+    if (!h) b.classList.add('sel');
+    sw.appendChild(b);
+  }
+  wrap.appendChild(sw);
+
+  range.addEventListener('input', () => {
+    hue = Number(range.value);
+    readout.textContent = `${hue}°`;
+    for (const o of sw.children) o.classList.remove('sel');
+    apply();
+  });
+
+  const act = el('div', 'step-actions');
+  const go = el('button', 'btn', 'Happy with it →');
+  go.addEventListener('click', () => rail.complete('apply'));
+  act.appendChild(go);
+  wrap.appendChild(act);
+
+  return wrap;
 }
 
 function stepInstall(body) {
@@ -3008,139 +3272,6 @@ function makeZip(files) {
 }
 
 
-// ===== src/recolor.js =====
-// In-tool recolour: pick a colour, shift everything like it.
-//
-// This is the "I just want the jacket in red" path. It exists because forcing a round trip
-// through an image editor for a hue swap is absurd overhead for the most common edit
-// anyone will make.
-//
-// Selection is by HUE PROXIMITY rather than RGB distance. A garment in shadow and the same
-// garment in light are far apart in RGB but nearly identical in hue, so an RGB threshold
-// either misses the shaded folds or swallows the skin next to it. Hue distance selects the
-// whole garment across its full range of lighting, which is exactly what a recolour wants.
-
-function rgbToHsv(r, g, b) {
-  r /= 255; g /= 255; b /= 255;
-  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
-  let h = 0;
-  if (d) {
-    if (mx === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
-    else if (mx === g) h = ((b - r) / d + 2) / 6;
-    else h = ((r - g) / d + 4) / 6;
-  }
-  return [h, mx ? d / mx : 0, mx];
-}
-
-function hsvToRgb(h, s, v) {
-  h = ((h % 1) + 1) % 1;
-  const i = Math.floor(h * 6), f = h * 6 - i;
-  const p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
-  let r, g, b;
-  switch (i % 6) {
-    case 0: r = v; g = t; b = p; break;
-    case 1: r = q; g = v; b = p; break;
-    case 2: r = p; g = v; b = t; break;
-    case 3: r = p; g = q; b = v; break;
-    case 4: r = t; g = p; b = v; break;
-    default: r = v; g = p; b = q;
-  }
-  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
-}
-
-/** Shortest distance between two hues on the 0..1 wheel. */
-const hueDist = (a, b) => {
-  const d = Math.abs(a - b) % 1;
-  return d > 0.5 ? 1 - d : d;
-};
-
-/**
- * Which pixels count as "the thing you clicked".
- * @param {ImageData} img
- * @param {[number,number,number]} target  picked RGB
- * @param {{tolerance:number, minSat:number}} o
- *        tolerance 0..1 as a fraction of the hue wheel (0.055 ~ 20 degrees); minSat guards
- *        against grey pixels, whose hue is meaningless and which would otherwise all match
- *        at once.
- *
- *        The default is deliberately tight. Red fabric and tan skin sit only ~17 degrees
- *        apart, so a generous tolerance quietly recolours the wearer along with the
- *        garment -- which is why the UI shows the live selection rather than trusting a
- *        number.
- * @returns {Uint8Array} 1 per selected pixel
- */
-function buildMask(img, target, { tolerance = 0.055, minSat = 0.15 } = {}) {
-  const [th, ts] = rgbToHsv(target[0], target[1], target[2]);
-  const n = img.width * img.height;
-  const mask = new Uint8Array(n);
-  const d = img.data;
-  // A greyish target cannot be matched by hue at all, so fall back to RGB proximity --
-  // otherwise picking a white shirt selects the entire image.
-  const greyTarget = ts < minSat;
-  for (let i = 0; i < n; i++) {
-    const r = d[i * 4], g = d[i * 4 + 1], b = d[i * 4 + 2];
-    if (greyTarget) {
-      const dr = r - target[0], dg = g - target[1], db = b - target[2];
-      if (Math.sqrt(dr * dr + dg * dg + db * db) <= tolerance * 441) mask[i] = 1;
-      continue;
-    }
-    const [h, s] = rgbToHsv(r, g, b);
-    if (s >= minSat && hueDist(h, th) <= tolerance) mask[i] = 1;
-  }
-  return mask;
-}
-
-/**
- * Apply a shift to the masked pixels.
- * Saturation and value are MULTIPLIED, not replaced, so shading survives -- the whole
- * reason a recolour looks like fabric rather than a paint bucket.
- * @param {ImageData} src
- * @param {Uint8Array} mask
- * @param {{hue:number, sat:number, val:number}} o  hue in degrees, sat/val as multipliers
- * @returns {ImageData}
- */
-function applyShift(src, mask, { hue = 0, sat = 1, val = 1 } = {}) {
-  const out = cloneImage(src);
-  const d = out.data;
-  const dh = hue / 360;
-  for (let i = 0; i < mask.length; i++) {
-    if (!mask[i]) continue;
-    const [h, s, v] = rgbToHsv(d[i * 4], d[i * 4 + 1], d[i * 4 + 2]);
-    const [r, g, b] = hsvToRgb(h + dh, Math.min(1, s * sat), Math.min(1, v * val));
-    d[i * 4] = r; d[i * 4 + 1] = g; d[i * 4 + 2] = b;
-  }
-  return out;
-}
-
-/** Tint the unselected pixels down so the selection is obvious while adjusting. */
-function previewMask(src, mask) {
-  const out = cloneImage(src);
-  const d = out.data;
-  for (let i = 0; i < mask.length; i++) {
-    if (mask[i]) continue;
-    d[i * 4] = d[i * 4] * 0.25 + 10;
-    d[i * 4 + 1] = d[i * 4 + 1] * 0.25 + 12;
-    d[i * 4 + 2] = d[i * 4 + 2] * 0.25 + 20;
-  }
-  return out;
-}
-
-/** Copy an image, as an ImageData in a browser and a plain object in node -- the module
- *  stays unit-testable without a DOM. */
-function cloneImage(src) {
-  const data = new Uint8ClampedArray(src.data);
-  return typeof ImageData === 'function'
-    ? new ImageData(data, src.width, src.height)
-    : { data, width: src.width, height: src.height };
-}
-
-const maskCount = (mask) => {
-  let n = 0;
-  for (let i = 0; i < mask.length; i++) n += mask[i];
-  return n;
-};
-
-
 // ===== src/preview.js =====
 // Textured 3D preview. Raw WebGL, no three.js -- the tool has to stay one self-contained
 // file with no network access, and this needs exactly one shader.
@@ -3487,32 +3618,65 @@ function adopt(bundle, images, sorted) {
  *
  *  Targets are matched by texture HASH rather than by name or by slot order. The sheet a
  *  skin was painted against is the only thing that makes it correct, and a hash is the one
- *  identifier that cannot drift. */
-async function applySample() {
+ *  identifier that cannot drift.
+ *
+ *  Callable repeatedly with a different hue: the fetch and the mask happen once, and every
+ *  later call re-shifts from the PRISTINE image rather than from the last result, so
+ *  dragging a slider back and forth does not accumulate rounding error. */
+async function applySample(hue = 0) {
   if (!S.bundle) throw new Error('Load the character folder first.');
+  if (!S.sampleBase) {
+    const base = new Map();
+    for (const s of SAMPLE.sheets) {
+      const rec = S.textures.get(s.hash);
+      if (!rec) throw new Error(`This bundle has no sheet ${s.hash} — is it ${SAMPLE.character}?`);
+      const res = await fetch(SAMPLE.dir + s.file);
+      if (!res.ok) throw new Error(`${res.status} fetching ${s.file}`);
+      const img = await createImageBitmap(await res.blob());
+      const cv = document.createElement('canvas');
+      // Keep the ORIGINAL sheet size: the texture pool caps on cells, not pixels.
+      cv.width = rec.width; cv.height = rec.height;
+      cv.getContext('2d').drawImage(img, 0, 0, rec.width, rec.height);
+      const data = cv.getContext('2d').getImageData(0, 0, rec.width, rec.height);
+      // Rotate only the pixels that HAVE a hue. The skin is neon on near-black with white
+      // hotspots; leaving the greys alone keeps the blueprint reading as a blueprint
+      // instead of tinting the whole sheet like a colour filter.
+      base.set(s.hash, { data, mask: saturatedMask(data) });
+    }
+    S.sampleBase = base;
+  }
+
   const applied = [];
+  const previews = [];
   for (const s of SAMPLE.sheets) {
     const rec = S.textures.get(s.hash);
-    if (!rec) throw new Error(`This bundle has no sheet ${s.hash} — is it ${SAMPLE.character}?`);
-    const res = await fetch(SAMPLE.dir + s.file);
-    if (!res.ok) throw new Error(`${res.status} fetching ${s.file}`);
-    const img = await createImageBitmap(await res.blob());
-    const cv = document.createElement('canvas');
-    // Keep the ORIGINAL sheet size: the texture pool caps on cells, not pixels.
-    cv.width = rec.width; cv.height = rec.height;
-    cv.getContext('2d').drawImage(img, 0, 0, rec.width, rec.height);
-    rec.edited = cv.getContext('2d').getImageData(0, 0, rec.width, rec.height);
+    const { data, mask } = S.sampleBase.get(s.hash);
+    const out = hue ? applyShift(data, mask, { hue }) : cloneImage(data);
+    rec.edited = out;
     const tex = S.bundle.textures.find((t) => t.hash === s.hash);
     applied.push({ part: s.part, name: (tex && tex.name) || s.hash, w: rec.width, h: rec.height });
+    previews.push({ part: s.part, image: out });
   }
-  S.skinName = SAMPLE.name;
-  $('#skin-name').value = S.skinName;
-  select(SAMPLE.sheets[0].hash);
+  if (!S.skinName || S.skinName.startsWith(SAMPLE.name)) {
+    S.skinName = SAMPLE.name;
+    $('#skin-name').value = S.skinName;
+  }
+  if (S.selected !== SAMPLE.sheets[0].hash && !S.sampleTouched) select(SAMPLE.sheets[0].hash);
+  S.sampleTouched = true;
   drawTexture(); pushToPreview(); renderExport(); renderList();
   $('#step-edit').hidden = false;
   $('#step-export').hidden = false;
-  note(`Example skin "${SAMPLE.name}" applied to ${applied.length} sheets.`);
-  return { applied };
+  return { applied, previews };
+}
+
+/** Pixels with enough colour in them to be worth rotating. */
+function saturatedMask(img, minSat = 0.12) {
+  const m = new Uint8Array(img.width * img.height);
+  for (let i = 0; i < m.length; i++) {
+    const s = rgbToHsv(img.data[i * 4], img.data[i * 4 + 1], img.data[i * 4 + 2])[1];
+    m[i] = s >= minSat ? 1 : 0;
+  }
+  return m;
 }
 
 /** Second half of a swap: re-map the donor's clothing onto the body already loaded. */

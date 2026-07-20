@@ -16,6 +16,7 @@ import { el, wireDrop } from './dom.js';
 import { Rail, verdict } from './rail.js';
 import { ART, person } from './figure.js';
 import { SAMPLE } from '../sample.js';
+import { rgbToHsv, hsvToRgb } from '../recolor.js';
 
 let CAT = null;
 let onPick = () => {};
@@ -514,13 +515,19 @@ function stepApplySample(body) {
     go.textContent = 'applying…';
     out.innerHTML = '';
     try {
-      const res = await onApplySample();
+      const res = await onApplySample(0);
       out.appendChild(verdict({
         ok: true,
         title: 'Applied',
         lines: res.applied.map((a) => ({ k: a.part, v: `${a.name} · ${a.w}×${a.h}` })),
       }));
-      rail.complete('apply');
+      // ★ The step stays OPEN. rail.complete() redraws every step from scratch, which
+      // would throw away the tint controls the moment they appeared -- and more to the
+      // point, this is the one place in the tool where there is something to play with,
+      // so it should not close itself the instant it opens.
+      act.remove();
+      shots.remove();
+      body.appendChild(tintControls(res.previews));
     } catch (e) {
       go.disabled = false;
       go.textContent = 'Apply it →';
@@ -537,6 +544,117 @@ function stepApplySample(body) {
   act.appendChild(go);
   body.appendChild(act);
   body.appendChild(out);
+}
+
+/**
+ * Make the example theirs before they ship it.
+ *
+ * A walkthrough where you only press Next teaches the steps but leaves nothing of yours in
+ * the result. This skin is neon on near-black, which is the ideal thing to rotate: one
+ * slider moves the whole palette coherently and there is no way to make it look broken. So
+ * the first thing anyone ships is still something they chose.
+ */
+function tintControls(previews) {
+  const wrap = el('div', 'tint');
+
+  const shots = el('div', 'sample-shots');
+  const canvases = [];
+  for (const p of previews) {
+    const fig = el('div', 'sample-shot');
+    const cv = el('canvas');
+    cv.width = p.image.width;
+    cv.height = p.image.height;
+    cv.getContext('2d').putImageData(p.image, 0, 0);
+    canvases.push(cv);
+    fig.appendChild(cv);
+    fig.appendChild(el('div', 'fig-cap', p.part));
+    shots.appendChild(fig);
+  }
+  wrap.appendChild(shots);
+
+  wrap.appendChild(el('div', 'wz-q', 'Make it yours'));
+  wrap.appendChild(el('div', 'wz-note',
+    'The example is mostly pink. Drag this and the whole palette turns with it — wireframe, '
+    + 'grid and glow together — while the blacks and the white hotspots stay put. Everything '
+    + 'below updates live, including the 3D view.'));
+
+  let hue = 0;
+
+  // Coalescing throttle: one shift in flight, the newest requested value queued behind it,
+  // and the queue is always drained. Deliberately NOT requestAnimationFrame -- rAF is for
+  // painting and a browser is entitled never to run it in a hidden tab, which would leave
+  // the slider's last position silently unapplied while the UI claimed otherwise.
+  let running = false;
+  let queued = null;
+  const apply = async () => {
+    if (running) { queued = hue; return; }
+    running = true;
+    try {
+      let h = hue;
+      for (;;) {
+        queued = null;
+        const res = await onApplySample(h);
+        res.previews.forEach((p, i) => {
+          canvases[i].getContext('2d').putImageData(p.image, 0, 0);
+        });
+        if (queued === null) break;
+        h = queued;
+      }
+    } finally {
+      running = false;
+    }
+  };
+
+  const row = el('label', 'sl');
+  row.appendChild(el('span', null, 'hue'));
+  const range = el('input');
+  range.type = 'range';
+  range.min = '0';
+  range.max = '359';
+  range.value = '0';
+  row.appendChild(range);
+  const readout = el('b', null, '0°');
+  row.appendChild(readout);
+  wrap.appendChild(row);
+
+  // Swatches are rendered by shifting the skin's OWN accent colour, so each one previews
+  // the real result rather than an approximation someone had to name.
+  // `tint-swatch`, not `swatch`: the recolour panel already owns `.swatch` for its picked
+  // colour chip, and reusing it silently restyled that instead.
+  const sw = el('div', 'swatches');
+  const ACCENT = [224, 57, 155];
+  const [ah, as, av] = rgbToHsv(ACCENT[0], ACCENT[1], ACCENT[2]);
+  for (const h of [0, 40, 90, 150, 200, 250, 300]) {
+    const b = el('button', 'tint-swatch');
+    b.type = 'button';
+    b.title = h ? `+${h}°` : 'the original';
+    b.style.background = `rgb(${hsvToRgb(ah + h / 360, as, av).join(',')})`;
+    b.addEventListener('click', () => {
+      hue = h;
+      range.value = String(h);
+      readout.textContent = `${h}°`;
+      for (const o of sw.children) o.classList.toggle('sel', o === b);
+      apply();
+    });
+    if (!h) b.classList.add('sel');
+    sw.appendChild(b);
+  }
+  wrap.appendChild(sw);
+
+  range.addEventListener('input', () => {
+    hue = Number(range.value);
+    readout.textContent = `${hue}°`;
+    for (const o of sw.children) o.classList.remove('sel');
+    apply();
+  });
+
+  const act = el('div', 'step-actions');
+  const go = el('button', 'btn', 'Happy with it →');
+  go.addEventListener('click', () => rail.complete('apply'));
+  act.appendChild(go);
+  wrap.appendChild(act);
+
+  return wrap;
 }
 
 function stepInstall(body) {

@@ -144,32 +144,65 @@ function adopt(bundle, images, sorted) {
  *
  *  Targets are matched by texture HASH rather than by name or by slot order. The sheet a
  *  skin was painted against is the only thing that makes it correct, and a hash is the one
- *  identifier that cannot drift. */
-async function applySample() {
+ *  identifier that cannot drift.
+ *
+ *  Callable repeatedly with a different hue: the fetch and the mask happen once, and every
+ *  later call re-shifts from the PRISTINE image rather than from the last result, so
+ *  dragging a slider back and forth does not accumulate rounding error. */
+async function applySample(hue = 0) {
   if (!S.bundle) throw new Error('Load the character folder first.');
+  if (!S.sampleBase) {
+    const base = new Map();
+    for (const s of SAMPLE.sheets) {
+      const rec = S.textures.get(s.hash);
+      if (!rec) throw new Error(`This bundle has no sheet ${s.hash} — is it ${SAMPLE.character}?`);
+      const res = await fetch(SAMPLE.dir + s.file);
+      if (!res.ok) throw new Error(`${res.status} fetching ${s.file}`);
+      const img = await createImageBitmap(await res.blob());
+      const cv = document.createElement('canvas');
+      // Keep the ORIGINAL sheet size: the texture pool caps on cells, not pixels.
+      cv.width = rec.width; cv.height = rec.height;
+      cv.getContext('2d').drawImage(img, 0, 0, rec.width, rec.height);
+      const data = cv.getContext('2d').getImageData(0, 0, rec.width, rec.height);
+      // Rotate only the pixels that HAVE a hue. The skin is neon on near-black with white
+      // hotspots; leaving the greys alone keeps the blueprint reading as a blueprint
+      // instead of tinting the whole sheet like a colour filter.
+      base.set(s.hash, { data, mask: saturatedMask(data) });
+    }
+    S.sampleBase = base;
+  }
+
   const applied = [];
+  const previews = [];
   for (const s of SAMPLE.sheets) {
     const rec = S.textures.get(s.hash);
-    if (!rec) throw new Error(`This bundle has no sheet ${s.hash} — is it ${SAMPLE.character}?`);
-    const res = await fetch(SAMPLE.dir + s.file);
-    if (!res.ok) throw new Error(`${res.status} fetching ${s.file}`);
-    const img = await createImageBitmap(await res.blob());
-    const cv = document.createElement('canvas');
-    // Keep the ORIGINAL sheet size: the texture pool caps on cells, not pixels.
-    cv.width = rec.width; cv.height = rec.height;
-    cv.getContext('2d').drawImage(img, 0, 0, rec.width, rec.height);
-    rec.edited = cv.getContext('2d').getImageData(0, 0, rec.width, rec.height);
+    const { data, mask } = S.sampleBase.get(s.hash);
+    const out = hue ? applyShift(data, mask, { hue }) : cloneImage(data);
+    rec.edited = out;
     const tex = S.bundle.textures.find((t) => t.hash === s.hash);
     applied.push({ part: s.part, name: (tex && tex.name) || s.hash, w: rec.width, h: rec.height });
+    previews.push({ part: s.part, image: out });
   }
-  S.skinName = SAMPLE.name;
-  $('#skin-name').value = S.skinName;
-  select(SAMPLE.sheets[0].hash);
+  if (!S.skinName || S.skinName.startsWith(SAMPLE.name)) {
+    S.skinName = SAMPLE.name;
+    $('#skin-name').value = S.skinName;
+  }
+  if (S.selected !== SAMPLE.sheets[0].hash && !S.sampleTouched) select(SAMPLE.sheets[0].hash);
+  S.sampleTouched = true;
   drawTexture(); pushToPreview(); renderExport(); renderList();
   $('#step-edit').hidden = false;
   $('#step-export').hidden = false;
-  note(`Example skin "${SAMPLE.name}" applied to ${applied.length} sheets.`);
-  return { applied };
+  return { applied, previews };
+}
+
+/** Pixels with enough colour in them to be worth rotating. */
+function saturatedMask(img, minSat = 0.12) {
+  const m = new Uint8Array(img.width * img.height);
+  for (let i = 0; i < m.length; i++) {
+    const s = rgbToHsv(img.data[i * 4], img.data[i * 4 + 1], img.data[i * 4 + 2])[1];
+    m[i] = s >= minSat ? 1 : 0;
+  }
+  return m;
 }
 
 /** Second half of a swap: re-map the donor's clothing onto the body already loaded. */
