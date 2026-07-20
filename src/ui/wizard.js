@@ -577,6 +577,8 @@ function tintControls(previews) {
     'The example is mostly pink. Drag this and the whole palette turns with it — wireframe, '
     + 'grid and glow together — while the blacks and the white hotspots stay put. Everything '
     + 'below updates live, including the 3D view.'));
+  const named = el('div', 'wz-note');
+  wrap.appendChild(named);
 
   let hue = 0;
 
@@ -597,6 +599,13 @@ function tintControls(previews) {
         res.previews.forEach((p, i) => {
           canvases[i].getContext('2d').putImageData(p.image, 0, 0);
         });
+        // Show the name it will ship under. Each hue gets its own, because the asset name
+        // IS the identity -- two colours under one name would collide on the same hash and
+        // the second would quietly replace the first.
+        named.textContent = res.skinName
+          ? `Will be published as “${res.skinName}” — each colour gets its own name, so you `
+            + 'can install several at once without them overwriting each other.'
+          : '';
         if (queued === null) break;
         h = queued;
       }

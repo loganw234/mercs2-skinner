@@ -70,7 +70,15 @@ export async function boot() {
   if (!preview.ok) $('#preview-note').textContent = 'WebGL unavailable — the 3D preview is disabled.';
   $('#show-uv').addEventListener('change', (e) => { S.showUV = e.target.checked; drawTexture(); });
   $('#replace-input').addEventListener('change', (e) => replaceTexture(e.target.files[0]).catch(fail));
-  $('#skin-name').addEventListener('input', (e) => { S.skinName = e.target.value; renderExport(); });
+  $('#skin-name').addEventListener('input', (e) => {
+    S.skinName = e.target.value;
+    // Remember that the NAME is theirs now. Guessing this from the string ("does it still
+    // look like something we generated?") was wrong: the picker sets <character>_custom,
+    // which matches none of the sample's own patterns, so the walkthrough silently stopped
+    // renaming itself per hue and every colour shipped under one name again.
+    S.skinNameTouched = true;
+    renderExport();
+  });
   $('#btn-revert').addEventListener('click', () => {
     const t = S.textures.get(S.selected);
     if (t) { t.edited = null; drawTexture(); pushToPreview(); renderExport(); renderList(); }
@@ -183,16 +191,21 @@ async function applySample(hue = 0) {
     applied.push({ part: s.part, name: (tex && tex.name) || s.hash, w: rec.width, h: rec.height });
     previews.push({ part: s.part, image: out });
   }
-  if (!S.skinName || S.skinName.startsWith(SAMPLE.name)) {
-    S.skinName = SAMPLE.name;
-    $('#skin-name').value = S.skinName;
+  // ★ The hue goes in the NAME. Two differently-coloured exports of the same example would
+  // otherwise both hash to `mechanic_blueprint` and the second would silently replace the
+  // first -- a 32-bit name hash is the asset's whole identity here. Only overwrite a name
+  // that is still one of ours, so a name the user typed themselves survives.
+  const auto = hue ? `${SAMPLE.name}_h${hue}` : SAMPLE.name;
+  if (!S.skinNameTouched) {
+    S.skinName = auto;
+    $('#skin-name').value = auto;
   }
   if (S.selected !== SAMPLE.sheets[0].hash && !S.sampleTouched) select(SAMPLE.sheets[0].hash);
   S.sampleTouched = true;
   drawTexture(); pushToPreview(); renderExport(); renderList();
   $('#step-edit').hidden = false;
   $('#step-export').hidden = false;
-  return { applied, previews };
+  return { applied, previews, skinName: S.skinName };
 }
 
 /** Pixels with enough colour in them to be worth rotating. */
