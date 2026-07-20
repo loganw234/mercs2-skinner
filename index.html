@@ -25,12 +25,15 @@
   h2 .n { display:inline-block; width:18px; height:18px; line-height:18px; text-align:center;
           border-radius:50%; background:var(--panel2); color:var(--accent); margin-right:7px; font-size:11px; }
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px; }
-  .drop { border:1.5px dashed var(--line); border-radius:8px; padding:18px; text-align:center;
-          cursor:pointer; background:var(--panel); transition:.12s; }
+  /* display:block is load-bearing -- a <label> is inline by default, and the block-level
+     children below then escape the border box and render as a stray rectangle. */
+  .drop { display:block; border:1.5px dashed var(--line); border-radius:8px; padding:18px;
+          text-align:center; cursor:pointer; background:var(--panel); transition:.12s; }
   .drop:hover, .drop.over { border-color:var(--accent); background:var(--panel2); }
   .drop input { display:none; }
   .drop b { display:block; margin-bottom:3px; }
-  .drop .hint { color:var(--faint); font-size:12px; }
+  .drop .hint { display:block; color:var(--faint); font-size:12px; }
+  .drop .hint code { white-space:normal; word-break:break-word; }
   .fname { color:var(--ok); font-size:12px; margin-top:8px; }
 
   .edit { display:grid; grid-template-columns:270px minmax(320px,1fr) minmax(280px,420px); gap:14px; }
@@ -164,7 +167,7 @@
     <label class="drop" id="drop">
       <input type="file" id="bundle-input" webkitdirectory directory multiple>
       <b>Drop an export-bundle folder</b>
-      <span class="hint"><code>mercs2_workshop --export-bundle &lt;character&gt; --out &lt;dir&gt;</code></span>
+      <span class="hint"><code>.\mercs2_workshop --export-bundle &lt;character&gt; --out &lt;dir&gt;</code></span>
     </label>
     <div class="fname" id="bundle-name"></div>
     <div class="muted" style="margin-top:8px">

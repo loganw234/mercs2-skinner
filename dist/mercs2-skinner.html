@@ -25,12 +25,15 @@
   h2 .n { display:inline-block; width:18px; height:18px; line-height:18px; text-align:center;
           border-radius:50%; background:var(--panel2); color:var(--accent); margin-right:7px; font-size:11px; }
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px; }
-  .drop { border:1.5px dashed var(--line); border-radius:8px; padding:18px; text-align:center;
-          cursor:pointer; background:var(--panel); transition:.12s; }
+  /* display:block is load-bearing -- a <label> is inline by default, and the block-level
+     children below then escape the border box and render as a stray rectangle. */
+  .drop { display:block; border:1.5px dashed var(--line); border-radius:8px; padding:18px;
+          text-align:center; cursor:pointer; background:var(--panel); transition:.12s; }
   .drop:hover, .drop.over { border-color:var(--accent); background:var(--panel2); }
   .drop input { display:none; }
   .drop b { display:block; margin-bottom:3px; }
-  .drop .hint { color:var(--faint); font-size:12px; }
+  .drop .hint { display:block; color:var(--faint); font-size:12px; }
+  .drop .hint code { white-space:normal; word-break:break-word; }
   .fname { color:var(--ok); font-size:12px; margin-top:8px; }
 
   .edit { display:grid; grid-template-columns:270px minmax(320px,1fr) minmax(280px,420px); gap:14px; }
@@ -164,7 +167,7 @@
     <label class="drop" id="drop">
       <input type="file" id="bundle-input" webkitdirectory directory multiple>
       <b>Drop an export-bundle folder</b>
-      <span class="hint"><code>mercs2_workshop --export-bundle &lt;character&gt; --out &lt;dir&gt;</code></span>
+      <span class="hint"><code>.\mercs2_workshop --export-bundle &lt;character&gt; --out &lt;dir&gt;</code></span>
     </label>
     <div class="fname" id="bundle-name"></div>
     <div class="muted" style="margin-top:8px">
@@ -805,7 +808,7 @@ function sortBundleFiles(files) {
 }
 
 const MISSING_HINT =
-  'Expected a folder produced by:  mercs2_workshop --export-bundle <character> --out <dir>\n' +
+  'Expected a folder produced by:  .\\mercs2_workshop --export-bundle <character> --out <dir>\n' +
   'It should contain manifest.json, model.gltf, model.bin, textures/ and raw/.';
 
 
@@ -1081,12 +1084,15 @@ function readDdsRgb(buf) {
   h2 .n { display:inline-block; width:18px; height:18px; line-height:18px; text-align:center;
           border-radius:50%; background:var(--panel2); color:var(--accent); margin-right:7px; font-size:11px; }
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px; }
-  .drop { border:1.5px dashed var(--line); border-radius:8px; padding:18px; text-align:center;
-          cursor:pointer; background:var(--panel); transition:.12s; }
+  /* display:block is load-bearing -- a <label> is inline by default, and the block-level
+     children below then escape the border box and render as a stray rectangle. */
+  .drop { display:block; border:1.5px dashed var(--line); border-radius:8px; padding:18px;
+          text-align:center; cursor:pointer; background:var(--panel); transition:.12s; }
   .drop:hover, .drop.over { border-color:var(--accent); background:var(--panel2); }
   .drop input { display:none; }
   .drop b { display:block; margin-bottom:3px; }
-  .drop .hint { color:var(--faint); font-size:12px; }
+  .drop .hint { display:block; color:var(--faint); font-size:12px; }
+  .drop .hint code { white-space:normal; word-break:break-word; }
   .fname { color:var(--ok); font-size:12px; margin-top:8px; }
 
   .edit { display:grid; grid-template-columns:270px minmax(320px,1fr) minmax(280px,420px); gap:14px; }
@@ -1220,7 +1226,7 @@ function readDdsRgb(buf) {
     <label class="drop" id="drop">
       <input type="file" id="bundle-input" webkitdirectory directory multiple>
       <b>Drop an export-bundle folder</b>
-      <span class="hint"><code>mercs2_workshop --export-bundle &lt;character&gt; --out &lt;dir&gt;</code></span>
+      <span class="hint"><code>.\mercs2_workshop --export-bundle &lt;character&gt; --out &lt;dir&gt;</code></span>
     </label>
     <div class="fname" id="bundle-name"></div>
     <div class="muted" style="margin-top:8px">
@@ -1481,7 +1487,9 @@ function buildWizard(root) {
     sel.id = 'wz-char';
     const byFaction = {};
     for (const c of list) (byFaction[c.faction] = byFaction[c.faction] || []).push(c);
-    sel.appendChild(el('option', null, '— choose —'));
+    const ph0 = el('option', null, '— choose —');
+    ph0.value = '';
+    sel.appendChild(ph0);
     for (const f of Object.keys(byFaction).sort()) {
       const og = document.createElement('optgroup');
       og.label = f;
@@ -1592,6 +1600,46 @@ function renderDetail(root, c, goal) {
       + 'draw the UV layout over its real textures, which works just as well.'));
   }
 
+  // --- who is lending the clothes ---
+  // Without this the second command reads `<the_character_whose_clothes_you_want>` and the
+  // user has to go and find a name that this page already knows. The pick does not change
+  // what the tool does -- it only fills the command in -- but that is the whole friction.
+  let donorSel = null;
+  if (goal === 'swap') {
+    // A donor is only useful if it owns body sheets. Characters that cannot be CLONED are
+    // perfectly good donors, since only their artwork is borrowed, so the wardrobe is much
+    // larger than the list of bodies.
+    const wardrobe = allCharacters().filter(
+      (x) => x.name !== c.name && (x.sheets || []).some((s) => s.part === 'ub' || s.part === 'lb'));
+    root.appendChild(el('div', 'wz-q', 'Whose clothes?'));
+    root.appendChild(el('div', 'wz-note',
+      `${wardrobe.length} characters own body textures and can lend them. Characters that `
+      + 'cannot be cloned are still fine here — you are borrowing their artwork, not their '
+      + 'model.'));
+    donorSel = el('select');
+    donorSel.id = 'wz-donor';
+    const byF = {};
+    for (const x of wardrobe) (byF[x.faction] = byF[x.faction] || []).push(x);
+    // An <option> with no value attribute reports its TEXT as its value, so without this
+    // the placeholder reads back as "— choose —" and lands in the generated command.
+    const ph = el('option', null, '— choose —');
+    ph.value = '';
+    donorSel.appendChild(ph);
+    for (const f of Object.keys(byF).sort()) {
+      const og = document.createElement('optgroup');
+      og.label = f;
+      for (const x of byF[f].sort((a, b) => a.name.localeCompare(b.name))) {
+        const parts = x.sheets.filter((s) => s.part === 'ub' || s.part === 'lb')
+          .map((s) => s.part).join(', ');
+        const o = el('option', null, `${x.name}   (${parts})`);
+        o.value = x.name;
+        og.appendChild(o);
+      }
+      donorSel.appendChild(og);
+    }
+    root.appendChild(donorSel);
+  }
+
   // --- the command ---
   root.appendChild(el('div', 'wz-q', 'Get the character out of the game'));
   root.appendChild(el('div', 'wz-note',
@@ -1624,14 +1672,18 @@ function renderDetail(root, c, goal) {
 
   const upd = () => {
     const dir = (out.value || 'C:\\mercs2-skins').replace(/[\\/]+$/, '');
+    // `.\` is required: PowerShell refuses to run an executable from the current directory
+    // without it, and the instructions above tell people to cd into the tool's folder.
+    const run = (n) => `.\\mercs2_workshop --export-bundle ${n} --out "${dir}"`;
     pre.textContent = goal === 'swap'
       // The swap needs TWO bundles, and finding that out one command at a time is the most
-      // annoying possible way to learn it. Emit both, with the second left to fill in.
-      ? `mercs2_workshop --export-bundle ${c.name} --out "${dir}"\n`
-        + `mercs2_workshop --export-bundle <the_character_whose_clothes_you_want> --out "${dir}"`
-      : `mercs2_workshop --export-bundle ${c.name} --out "${dir}"`;
+      // annoying possible way to learn it. Emit both.
+      ? `${run(c.name)}\n${run(donorSel && donorSel.value ? donorSel.value
+        : '<pick whose clothes above>')}`
+      : run(c.name);
   };
   out.addEventListener('input', upd);
+  if (donorSel) donorSel.addEventListener('change', upd);
   upd();
 
   root.appendChild(el('div', 'wz-note', goal === 'swap'
@@ -1659,8 +1711,9 @@ function renderDetail(root, c, goal) {
       + 'pmc_hum_jennifer is the well-known example. Pick another, or reskin it in place '
       + 'instead of cloning.'],
     ['The command does nothing / "not recognised"',
-      'You are not in the folder holding mercs2_workshop.exe. Either cd into it first, or '
-      + 'type the full path to the exe.'],
+      'You are not in the folder holding mercs2_workshop.exe. cd into it first, or replace '
+      + 'the .\\ with the full path to the exe. The leading .\\ is required on Windows — '
+      + 'PowerShell will not run an executable from the current folder without it.'],
     ['It cannot find vz.wad',
       'Run it from your Mercenaries 2 install, or pass the game path. It reads the base WAD '
       + 'from the install — it never modifies it.'],

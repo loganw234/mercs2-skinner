@@ -196,5 +196,5 @@ export function sortBundleFiles(files) {
 }
 
 export const MISSING_HINT =
-  'Expected a folder produced by:  mercs2_workshop --export-bundle <character> --out <dir>\n' +
+  'Expected a folder produced by:  .\\mercs2_workshop --export-bundle <character> --out <dir>\n' +
   'It should contain manifest.json, model.gltf, model.bin, textures/ and raw/.';
