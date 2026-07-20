@@ -7,9 +7,10 @@ import { readBundle, sortBundleFiles, MISSING_HINT } from '../bundle.js';
 import { buildUcfxTexture, isPow2 } from '../texture.js';
 import { planExport, buildCommands, buildModkitMod, preflight, hex8, sanitizeAssetName } from '../export.js';
 import { setNameSource, nameForHash } from '../names.js';
-import { setCatalogue, buildWizard, onDonorPicked } from './wizard.js';
-import { initSwap, setSwapVisible } from './swap.js';
-import { $, el, wireDrop } from './dom.js';
+import { setCatalogue, buildWizard, onDonorPicked, setBundleLoader } from './wizard.js';
+import { runSwap } from './swap.js';
+import { $, el } from './dom.js';
+import { bodySheets } from '../transfer.js';
 import { makeZip } from '../zip.js';
 import { buildMask, applyShift, previewMask, maskCount, cloneImage, rgbToHsv, hsvToRgb } from '../recolor.js';
 import { Preview } from '../preview.js';
@@ -43,22 +44,27 @@ export async function boot() {
       S.skinName = sanitizeAssetName(c.name + '_custom');
       if ($('#skin-name')) $('#skin-name').value = S.skinName;
     }
-    setSwapVisible(goal === 'swap' && !!S.bundle, S.bundle && S.bundle.name);
   });
 
-  initSwap({
-    parseFolder,
-    getTarget: () => S.bundle,
-    getSizes: () => new Map([...S.textures].map(([h, r]) => [h, { width: r.width, height: r.height }])),
-    onApply: applyTransfer,
-    status,
-    fail,
+  // The wizard owns the drop zones now, and verifies each folder before letting anyone
+  // move past it. It hands the parsed bundle back so the rest of the tool can use it.
+  setBundleLoader(async (files, which) => {
+    const { bundle, images, sorted } = await parseFolder(files);
+    return {
+      name: bundle.name,
+      textures: images.size,
+      sheets: bodySheets(bundle).length,
+      tris: bundle.textures.reduce((n, t) => n + t.triangles, 0),
+      // Only committed when they press Continue, so a wrong folder leaves no trace.
+      onContinue: () => {
+        if (which === 'donor') applyDonor(bundle, images).catch(fail);
+        else adopt(bundle, images, sorted);
+      },
+    };
   });
 
   preview = new Preview($('#preview'));
   if (!preview.ok) $('#preview-note').textContent = 'WebGL unavailable — the 3D preview is disabled.';
-
-  wireDrop($('#drop'), $('#bundle-input'), (files) => load(files).catch(fail));
   $('#show-uv').addEventListener('change', (e) => { S.showUV = e.target.checked; drawTexture(); });
   $('#replace-input').addEventListener('change', (e) => replaceTexture(e.target.files[0]).catch(fail));
   $('#skin-name').addEventListener('input', (e) => { S.skinName = e.target.value; renderExport(); });
@@ -71,7 +77,10 @@ export async function boot() {
   $('#btn-png').addEventListener('click', exportPng);
   wireRecolor();
   window.addEventListener('resize', () => preview.draw());
-  status('Drop an export-bundle folder to begin.');
+  // No standing instruction here any more -- the rail says what to do next, and a banner
+  // telling people to drop a folder before a drop zone exists is exactly the kind of
+  // stray instruction this redesign is trying to get rid of.
+  status('');
 }
 
 /** Read a dropped export-bundle folder into a bundle plus its decoded textures.
@@ -102,9 +111,8 @@ async function parseFolder(files) {
   return { bundle, images, sorted };
 }
 
-async function load(files) {
-  status('reading bundle…');
-  const { bundle, images, sorted } = await parseFolder(files);
+/** Take a verified bundle as the thing being edited. */
+function adopt(bundle, images, sorted) {
   S.bundle = bundle;
   S.files = sorted;
   S.textures.clear();
@@ -118,11 +126,34 @@ async function load(files) {
   $('#bundle-name').textContent =
     `${S.bundle.name} — ${S.bundle.textures.length} textures, ${S.bundle.prims.length} draw groups` +
     (S.bundle.skinned ? ', skinned' : '');
-  $('#step-edit').hidden = false;
-  $('#step-export').hidden = false;
-  setSwapVisible(S.wizardGoal === 'swap', S.bundle.name);
+  // On a swap the editing panels stay shut until the outfit has actually been applied --
+  // there is nothing useful to look at in between, and an empty half-built page is exactly
+  // the "now what?" moment this flow exists to remove.
+  const swapping = S.wizardGoal === 'swap';
+  $('#step-edit').hidden = swapping;
+  $('#step-export').hidden = swapping;
   select(S.bundle.textures[0]?.hash);
   renderList();
+  status('');
+}
+
+/** Second half of a swap: re-map the donor's clothing onto the body already loaded. */
+async function applyDonor(donor, donorImages) {
+  if (!S.bundle) throw new Error('Load the body folder first.');
+  status(`re-mapping ${donor.name}'s clothing onto ${S.bundle.name}…`);
+  await new Promise((r) => setTimeout(r, 16));
+  const report = runSwap({
+    target: S.bundle,
+    donor,
+    donorImages,
+    targetSizes: new Map([...S.textures].map(([h, r]) => [h, { width: r.width, height: r.height }])),
+  });
+  applyTransfer(report.results);
+  $('#step-edit').hidden = false;
+  $('#step-export').hidden = false;
+  $('#swap-report').hidden = false;
+  $('#swap-report').innerHTML = '';
+  $('#swap-report').appendChild(report.card);
   status('');
 }
 

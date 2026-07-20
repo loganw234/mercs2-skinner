@@ -7,10 +7,14 @@ Make new skins for Mercenaries 2 characters, in your browser.
 Or download [`dist/mercs2-skinner.html`](dist/mercs2-skinner.html) and open it offline — one
 self-contained file, no install, no network, no server.
 
-It starts by asking what you want to do and which character, then writes out the exact
-command to get that character out of the game. If you only want to *paint* something, it
-hands you a ready-made template and you need no game tools at all until you want to put the
-result back in.
+It asks one question at a time and checks your work at every point where you had to go and
+do something outside it. Pick what you want from three cards, pick a character, run the
+command it writes for you, drag the folder back in — and it tells you whether you dragged in
+the right thing before letting you continue.
+
+That last part is the whole design. Every step after the current one is visibly locked, and
+a dropped folder is inspected and reported on rather than silently accepted, so there is no
+point where you are left holding a half-finished thing wondering whether it worked.
 
 ---
 

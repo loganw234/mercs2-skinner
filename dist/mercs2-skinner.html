@@ -135,6 +135,80 @@
   .sl input[type=range] { width:100%; accent-color:var(--accent); }
   .sl b { font-family:ui-monospace,monospace; font-size:11px; color:var(--fg); text-align:right; font-weight:400; }
   #tex-canvas.picking { cursor:crosshair; }
+
+  /* ---- the rail: one open step, the rest locked ---- */
+  .step { border:1px solid var(--line); border-radius:10px; margin-bottom:8px;
+          background:var(--panel); overflow:hidden; }
+  .step.open { border-color:#2f4a6d; background:var(--panel2); }
+  .step.locked { opacity:.4; }
+  .step-head { display:flex; align-items:center; gap:10px; width:100%; padding:12px 14px;
+               background:none; border:0; color:var(--fg); font:inherit; text-align:left; }
+  .step-head.clickable { cursor:pointer; }
+  .step-head.clickable:hover { background:#18243b; }
+  .step-n { flex:none; width:22px; height:22px; line-height:22px; text-align:center;
+            border-radius:50%; background:var(--panel); color:var(--faint);
+            border:1px solid var(--line); font-size:11px; }
+  .step.open .step-n { background:var(--accent); color:#06121f; border-color:var(--accent); font-weight:700; }
+  .step.done .step-n { background:#123324; color:var(--ok); border-color:#1e5236; }
+  .step-t { font-weight:600; }
+  .step.locked .step-t, .step.done .step-t { font-weight:400; color:var(--dim); }
+  .step-sum { color:var(--ok); font-size:12px; margin-left:auto; font-family:ui-monospace,monospace; }
+  .step-lock { margin-left:auto; font-size:10px; color:var(--faint); text-transform:uppercase;
+               letter-spacing:.08em; }
+  .step-body { padding:2px 16px 18px; }
+  .step-body > p { color:var(--dim); margin:0 0 14px; max-width:70ch; }
+
+  /* ---- choice cards ---- */
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; }
+  .card { display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center;
+          background:var(--panel); border:1px solid var(--line); border-radius:10px;
+          padding:16px 14px; cursor:pointer; color:var(--fg); font:inherit; transition:.12s; }
+  .card:hover { border-color:var(--accent); background:#18243b; transform:translateY(-2px); }
+  .card.sel { border-color:var(--accent); outline:1px solid var(--accent); background:#1d2c47; }
+  .card-t { font-weight:600; }
+  .card-s { color:var(--dim); font-size:12px; line-height:1.45; }
+  .card-art { height:112px; display:flex; align-items:center; justify-content:center; }
+
+  /* ---- the figures ---- */
+  .fig-skin { fill:#8b6b52; }
+  .fig-cloth { fill:#3f5d86; }
+  .fig-lit-body .fig-cloth { fill:#243449; }
+  .fig-lit-clothes .fig-skin { fill:#4a3d33; }
+  .fig-lit-body .fig-skin { animation:figpulse 1.8s ease-in-out infinite; }
+  .fig-lit-clothes .fig-cloth { animation:figpulse 1.8s ease-in-out infinite; }
+  @keyframes figpulse { 0%,100% { opacity:.55; } 50% { opacity:1; } }
+  .fig-pair { display:flex; align-items:center; justify-content:center; gap:6px; }
+  .fig-slot { display:flex; flex-direction:column; align-items:center; gap:3px; }
+  .fig-cap { font-size:10px; color:var(--faint); text-transform:uppercase; letter-spacing:.07em; }
+  .fig-arrow { color:var(--accent); }
+  .fig-copies .fig-ghost { opacity:.75; }
+  .fig-copies .fig-d1 .fig-cloth { fill:#7a4a86; }
+  .fig-copies .fig-d2 .fig-cloth { fill:#3f7a5d; }
+  .fig-recolour .fig-cloth { animation:fighue 4s linear infinite; }
+  @keyframes fighue { 0% { fill:#3f5d86; } 33% { fill:#8a4a4a; } 66% { fill:#3f7a5d; } 100% { fill:#3f5d86; } }
+  @media (prefers-reduced-motion:reduce) {
+    .fig-skin, .fig-cloth { animation:none !important; opacity:1 !important; }
+  }
+
+  /* ---- verdicts ---- */
+  .verdict { border:1px solid var(--line); border-left-width:3px; border-radius:8px;
+             padding:11px 13px; margin:12px 0; background:var(--panel); }
+  .verdict.ok { border-left-color:var(--ok); }
+  .verdict.bad { border-left-color:var(--bad); }
+  .verdict-h { display:flex; align-items:center; gap:8px; font-weight:600; margin-bottom:7px; }
+  .verdict.ok .verdict-i { color:var(--ok); }
+  .verdict.bad .verdict-i { color:var(--bad); }
+  .verdict-row { display:grid; grid-template-columns:150px 1fr; gap:10px; font-size:12px;
+                 padding:2px 0; color:var(--dim); }
+  .verdict-row.bad .verdict-v { color:var(--bad); }
+  .verdict-k { color:var(--faint); }
+  .verdict-v { font-family:ui-monospace,monospace; }
+  .verdict-hint { margin-top:8px; font-size:12px; color:var(--warn); line-height:1.5; }
+  .step-actions { display:flex; gap:10px; align-items:center; margin-top:14px; flex-wrap:wrap; }
+  .picker { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:14px; align-items:start; }
+  @media (max-width:760px){ .picker { grid-template-columns:1fr; } }
+  .picker-fig { display:flex; flex-direction:column; align-items:center; gap:4px;
+                background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px 16px; }
 </style>
 </head>
 <body>
@@ -150,50 +224,18 @@
   <div id="error" hidden></div>
 
   <section>
-    <h2><span class="n">0</span>Start here</h2>
-    <div class="panel">
-      <div id="wizard"></div>
-      <div class="muted" style="margin-top:14px">
-        Need the tool? <b>mercs2_workshop</b> is in the
-        <a href="https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/releases" target="_blank" rel="noopener">community toolchain releases</a>.
-        Run it with no arguments to browse every character in 3D and read its name — much
-        easier than guessing from a list.
-      </div>
+    <div id="wizard"></div>
+    <div class="muted" style="margin-top:12px">
+      Need the tool? <b>mercs2_workshop</b> is in the
+      <a href="https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/releases" target="_blank" rel="noopener">community toolchain releases</a>.
+      Run it with no arguments to browse every character in 3D.
     </div>
-  </section>
-
-  <section>
-    <h2><span class="n">1</span>Bundle</h2>
-    <label class="drop" id="drop">
-      <input type="file" id="bundle-input" webkitdirectory directory multiple>
-      <b>Drop an export-bundle folder</b>
-      <span class="hint"><code>.\mercs2_workshop --export-bundle &lt;character&gt; --out &lt;dir&gt;</code></span>
-    </label>
-    <div class="fname" id="bundle-name"></div>
-    <div class="muted" style="margin-top:8px">
-      Everything comes from that folder — the decoded PNGs, the UV layout, the material
-      bindings and the original block bytes the new asset is cloned from.
-    </div>
-  </section>
-
-  <section id="step-swap" hidden>
-    <h2><span class="n">1b</span>Whose clothes?</h2>
-    <label class="drop" id="swap-drop">
-      <input type="file" id="swap-input" webkitdirectory directory multiple>
-      <b>Drop the outfit donor's export-bundle folder</b>
-      <span class="hint" id="swap-intro"></span>
-    </label>
-    <div class="fname" id="swap-name"></div>
-    <div class="muted" style="margin-top:8px">
-      The two characters do <b>not</b> need matching texture layouts — they almost never
-      have them. The clothing is re-mapped through the 3D body, so any pair works, and a
-      height difference is corrected automatically.
-    </div>
-    <div id="swap-report" hidden style="margin-top:12px"></div>
   </section>
 
   <section id="step-edit" hidden>
-    <h2><span class="n">2</span>Texture</h2>
+    <h2>Texture</h2>
+    <div class="fname" id="bundle-name" style="margin-bottom:10px"></div>
+    <div id="swap-report" hidden style="margin-bottom:14px"></div>
     <div class="edit">
       <div class="panel">
         <div id="tex-list"></div>
@@ -246,7 +288,7 @@
   </section>
 
   <section id="step-export" hidden>
-    <h2><span class="n">3</span>Export</h2>
+    <h2>Export</h2>
     <div class="panel">
       <div style="max-width:420px;margin-bottom:10px">
         <label class="muted" for="skin-name">Skin name</label>
@@ -1194,6 +1236,80 @@ function readDdsRgb(buf) {
   .sl input[type=range] { width:100%; accent-color:var(--accent); }
   .sl b { font-family:ui-monospace,monospace; font-size:11px; color:var(--fg); text-align:right; font-weight:400; }
   #tex-canvas.picking { cursor:crosshair; }
+
+  /* ---- the rail: one open step, the rest locked ---- */
+  .step { border:1px solid var(--line); border-radius:10px; margin-bottom:8px;
+          background:var(--panel); overflow:hidden; }
+  .step.open { border-color:#2f4a6d; background:var(--panel2); }
+  .step.locked { opacity:.4; }
+  .step-head { display:flex; align-items:center; gap:10px; width:100%; padding:12px 14px;
+               background:none; border:0; color:var(--fg); font:inherit; text-align:left; }
+  .step-head.clickable { cursor:pointer; }
+  .step-head.clickable:hover { background:#18243b; }
+  .step-n { flex:none; width:22px; height:22px; line-height:22px; text-align:center;
+            border-radius:50%; background:var(--panel); color:var(--faint);
+            border:1px solid var(--line); font-size:11px; }
+  .step.open .step-n { background:var(--accent); color:#06121f; border-color:var(--accent); font-weight:700; }
+  .step.done .step-n { background:#123324; color:var(--ok); border-color:#1e5236; }
+  .step-t { font-weight:600; }
+  .step.locked .step-t, .step.done .step-t { font-weight:400; color:var(--dim); }
+  .step-sum { color:var(--ok); font-size:12px; margin-left:auto; font-family:ui-monospace,monospace; }
+  .step-lock { margin-left:auto; font-size:10px; color:var(--faint); text-transform:uppercase;
+               letter-spacing:.08em; }
+  .step-body { padding:2px 16px 18px; }
+  .step-body > p { color:var(--dim); margin:0 0 14px; max-width:70ch; }
+
+  /* ---- choice cards ---- */
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; }
+  .card { display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center;
+          background:var(--panel); border:1px solid var(--line); border-radius:10px;
+          padding:16px 14px; cursor:pointer; color:var(--fg); font:inherit; transition:.12s; }
+  .card:hover { border-color:var(--accent); background:#18243b; transform:translateY(-2px); }
+  .card.sel { border-color:var(--accent); outline:1px solid var(--accent); background:#1d2c47; }
+  .card-t { font-weight:600; }
+  .card-s { color:var(--dim); font-size:12px; line-height:1.45; }
+  .card-art { height:112px; display:flex; align-items:center; justify-content:center; }
+
+  /* ---- the figures ---- */
+  .fig-skin { fill:#8b6b52; }
+  .fig-cloth { fill:#3f5d86; }
+  .fig-lit-body .fig-cloth { fill:#243449; }
+  .fig-lit-clothes .fig-skin { fill:#4a3d33; }
+  .fig-lit-body .fig-skin { animation:figpulse 1.8s ease-in-out infinite; }
+  .fig-lit-clothes .fig-cloth { animation:figpulse 1.8s ease-in-out infinite; }
+  @keyframes figpulse { 0%,100% { opacity:.55; } 50% { opacity:1; } }
+  .fig-pair { display:flex; align-items:center; justify-content:center; gap:6px; }
+  .fig-slot { display:flex; flex-direction:column; align-items:center; gap:3px; }
+  .fig-cap { font-size:10px; color:var(--faint); text-transform:uppercase; letter-spacing:.07em; }
+  .fig-arrow { color:var(--accent); }
+  .fig-copies .fig-ghost { opacity:.75; }
+  .fig-copies .fig-d1 .fig-cloth { fill:#7a4a86; }
+  .fig-copies .fig-d2 .fig-cloth { fill:#3f7a5d; }
+  .fig-recolour .fig-cloth { animation:fighue 4s linear infinite; }
+  @keyframes fighue { 0% { fill:#3f5d86; } 33% { fill:#8a4a4a; } 66% { fill:#3f7a5d; } 100% { fill:#3f5d86; } }
+  @media (prefers-reduced-motion:reduce) {
+    .fig-skin, .fig-cloth { animation:none !important; opacity:1 !important; }
+  }
+
+  /* ---- verdicts ---- */
+  .verdict { border:1px solid var(--line); border-left-width:3px; border-radius:8px;
+             padding:11px 13px; margin:12px 0; background:var(--panel); }
+  .verdict.ok { border-left-color:var(--ok); }
+  .verdict.bad { border-left-color:var(--bad); }
+  .verdict-h { display:flex; align-items:center; gap:8px; font-weight:600; margin-bottom:7px; }
+  .verdict.ok .verdict-i { color:var(--ok); }
+  .verdict.bad .verdict-i { color:var(--bad); }
+  .verdict-row { display:grid; grid-template-columns:150px 1fr; gap:10px; font-size:12px;
+                 padding:2px 0; color:var(--dim); }
+  .verdict-row.bad .verdict-v { color:var(--bad); }
+  .verdict-k { color:var(--faint); }
+  .verdict-v { font-family:ui-monospace,monospace; }
+  .verdict-hint { margin-top:8px; font-size:12px; color:var(--warn); line-height:1.5; }
+  .step-actions { display:flex; gap:10px; align-items:center; margin-top:14px; flex-wrap:wrap; }
+  .picker { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:14px; align-items:start; }
+  @media (max-width:760px){ .picker { grid-template-columns:1fr; } }
+  .picker-fig { display:flex; flex-direction:column; align-items:center; gap:4px;
+                background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px 16px; }
 </style>
 </head>
 <body>
@@ -1209,50 +1325,18 @@ function readDdsRgb(buf) {
   <div id="error" hidden></div>
 
   <section>
-    <h2><span class="n">0</span>Start here</h2>
-    <div class="panel">
-      <div id="wizard"></div>
-      <div class="muted" style="margin-top:14px">
-        Need the tool? <b>mercs2_workshop</b> is in the
-        <a href="https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/releases" target="_blank" rel="noopener">community toolchain releases</a>.
-        Run it with no arguments to browse every character in 3D and read its name — much
-        easier than guessing from a list.
-      </div>
+    <div id="wizard"></div>
+    <div class="muted" style="margin-top:12px">
+      Need the tool? <b>mercs2_workshop</b> is in the
+      <a href="https://github.com/Mercenaries-Fan-Build/mercs2-wad-simulator/releases" target="_blank" rel="noopener">community toolchain releases</a>.
+      Run it with no arguments to browse every character in 3D.
     </div>
-  </section>
-
-  <section>
-    <h2><span class="n">1</span>Bundle</h2>
-    <label class="drop" id="drop">
-      <input type="file" id="bundle-input" webkitdirectory directory multiple>
-      <b>Drop an export-bundle folder</b>
-      <span class="hint"><code>.\mercs2_workshop --export-bundle &lt;character&gt; --out &lt;dir&gt;</code></span>
-    </label>
-    <div class="fname" id="bundle-name"></div>
-    <div class="muted" style="margin-top:8px">
-      Everything comes from that folder — the decoded PNGs, the UV layout, the material
-      bindings and the original block bytes the new asset is cloned from.
-    </div>
-  </section>
-
-  <section id="step-swap" hidden>
-    <h2><span class="n">1b</span>Whose clothes?</h2>
-    <label class="drop" id="swap-drop">
-      <input type="file" id="swap-input" webkitdirectory directory multiple>
-      <b>Drop the outfit donor's export-bundle folder</b>
-      <span class="hint" id="swap-intro"></span>
-    </label>
-    <div class="fname" id="swap-name"></div>
-    <div class="muted" style="margin-top:8px">
-      The two characters do <b>not</b> need matching texture layouts — they almost never
-      have them. The clothing is re-mapped through the 3D body, so any pair works, and a
-      height difference is corrected automatically.
-    </div>
-    <div id="swap-report" hidden style="margin-top:12px"></div>
   </section>
 
   <section id="step-edit" hidden>
-    <h2><span class="n">2</span>Texture</h2>
+    <h2>Texture</h2>
+    <div class="fname" id="bundle-name" style="margin-bottom:10px"></div>
+    <div id="swap-report" hidden style="margin-bottom:14px"></div>
     <div class="edit">
       <div class="panel">
         <div id="tex-list"></div>
@@ -1305,7 +1389,7 @@ function readDdsRgb(buf) {
   </section>
 
   <section id="step-export" hidden>
-    <h2><span class="n">3</span>Export</h2>
+    <h2>Export</h2>
     <div class="panel">
       <div style="max-width:420px;margin-bottom:10px">
         <label class="muted" for="skin-name">Skin name</label>
@@ -1393,20 +1477,225 @@ function wireDrop(zone, input, handler) {
 }
 
 
+// ===== src/ui/rail.js =====
+// A rail: one question on screen at a time, everything after it locked.
+//
+// The old step 0 put every question, every caveat and both commands on screen at once. It
+// was all correct and all present, which is exactly the failure -- a beginner cannot tell
+// which sentence applies to them right now, so they read none of them and ask instead.
+//
+// So: one open step, finished ones collapsed to a single line with a tick, later ones
+// visibly locked. A locked step is not hidden -- seeing that three more steps exist is
+// reassuring, whereas an empty page is not -- it just cannot be interacted with yet.
+
+
+class Rail {
+  constructor(root) {
+    this.root = root;
+    this.steps = [];
+    this.open = 0;
+  }
+
+  /**
+   * @param {string} id
+   * @param {string} title      shown in the header, always
+   * @param {Function} render   (body, rail) => void. Called each time the step opens.
+   * @param {Function} [summary] () => string, the one-line recap once it is done
+   */
+  add(id, title, render, summary) {
+    this.steps.push({ id, title, render, summary, done: false });
+    return this;
+  }
+
+  /** Drop every step after `id` -- used when an earlier answer changes what follows. */
+  truncateAfter(id) {
+    const i = this.steps.findIndex((s) => s.id === id);
+    if (i >= 0) this.steps.length = i + 1;
+    return this;
+  }
+
+  get(id) { return this.steps.find((s) => s.id === id); }
+
+  /** Mark a step finished and open the next one.
+   *
+   *  Completing the LAST step leaves `open` past the end, so every step collapses to a
+   *  tick and nothing is left sitting open with no action in it -- the rail is finished,
+   *  and the work has moved to the panels below. */
+  complete(id) {
+    const i = this.steps.findIndex((s) => s.id === id);
+    if (i < 0) return;
+    this.steps[i].done = true;
+    if (this.open === i) this.open = i + 1;
+    this.draw();
+    if (this.open >= this.steps.length && this.onFinish) this.onFinish();
+  }
+
+  /** Re-open a finished step. Everything after it becomes unfinished again, because an
+   *  answer here usually invalidates them. */
+  reopen(id) {
+    const i = this.steps.findIndex((s) => s.id === id);
+    if (i < 0) return;
+    this.open = i;
+    for (let k = i; k < this.steps.length; k++) this.steps[k].done = false;
+    this.draw();
+  }
+
+  draw() {
+    this.root.innerHTML = '';
+    this.steps.forEach((s, i) => {
+      const locked = i > this.open;
+      const isOpen = i === this.open;
+      const wrap = el('div', `step${isOpen ? ' open' : ''}${locked ? ' locked' : ''}${s.done && !isOpen ? ' done' : ''}`);
+      wrap.dataset.step = s.id;
+
+      const head = el('button', 'step-head');
+      head.type = 'button';
+      head.appendChild(el('span', 'step-n', s.done && !isOpen ? '✓' : String(i + 1)));
+      head.appendChild(el('span', 'step-t', s.title));
+      if (s.done && !isOpen && s.summary) {
+        head.appendChild(el('span', 'step-sum', s.summary() || ''));
+      }
+      if (locked) head.appendChild(el('span', 'step-lock', 'locked'));
+      // Only a FINISHED step can be jumped back to. Skipping ahead is the thing this
+      // whole design exists to prevent.
+      if (s.done && !isOpen) {
+        head.addEventListener('click', () => this.reopen(s.id));
+        head.classList.add('clickable');
+      } else {
+        head.disabled = true;
+      }
+      wrap.appendChild(head);
+
+      if (isOpen) {
+        const body = el('div', 'step-body');
+        wrap.appendChild(body);
+        s.render(body, this);
+      }
+      this.root.appendChild(wrap);
+    });
+  }
+}
+
+/**
+ * A verdict card: what the tool found, and whether it is good enough to continue.
+ *
+ * Shown after anything the user supplies is inspected -- a dropped folder above all. The
+ * point is that "did it work?" is answered on screen, in the place they are looking,
+ * instead of being something they have to infer from whether an error appeared.
+ */
+function verdict({ ok, title, lines = [], hint }) {
+  const box = el('div', `verdict ${ok ? 'ok' : 'bad'}`);
+  const h = el('div', 'verdict-h');
+  h.appendChild(el('span', 'verdict-i', ok ? '✓' : '✕'));
+  h.appendChild(el('span', null, title));
+  box.appendChild(h);
+  for (const l of lines) {
+    const row = el('div', `verdict-row${l.ok === false ? ' bad' : ''}`);
+    row.appendChild(el('span', 'verdict-k', l.k));
+    row.appendChild(el('span', 'verdict-v', l.v));
+    box.appendChild(row);
+  }
+  if (hint) box.appendChild(el('div', 'verdict-hint', hint));
+  return box;
+}
+
+
+// ===== src/ui/figure.js =====
+// Little human figures that show what a choice actually does.
+//
+// "Whose BODY are you dressing?" and "Whose clothes?" are the two questions people get
+// wrong, and no amount of prose fixes it -- the words are already unambiguous and they
+// still get skipped. A picture of a person with the relevant half lit up is read before
+// the sentence is, and it is read by someone who is not going to read the sentence.
+//
+// Everything here is inline SVG with CSS classes; the animation lives in the stylesheet so
+// prefers-reduced-motion can switch it off in one place.
+
+const SKIN = 'fig-skin';
+const CLOTH = 'fig-cloth';
+
+/** One front-facing person. `lit` decides which half glows: 'body' | 'clothes' | 'all'. */
+function person(lit = 'all', scale = 1) {
+  const w = 100 * scale, h = 180 * scale;
+  return `
+<svg class="fig fig-lit-${lit}" viewBox="0 0 100 180" width="${w}" height="${h}"
+     role="img" aria-hidden="true">
+  <g class="${SKIN}">
+    <circle cx="50" cy="22" r="15"/>
+    <rect x="44" y="34" width="12" height="9" rx="3"/>
+    <rect x="20" y="82" width="11" height="26" rx="5"/>
+    <rect x="69" y="82" width="11" height="26" rx="5"/>
+    <rect x="37" y="139" width="11" height="26" rx="5"/>
+    <rect x="52" y="139" width="11" height="26" rx="5"/>
+    <ellipse cx="42.5" cy="168" rx="8" ry="5"/>
+    <ellipse cx="57.5" cy="168" rx="8" ry="5"/>
+  </g>
+  <g class="${CLOTH}">
+    <path d="M34 43 L66 43 Q74 45 76 54 L80 86 L67 89 L65 66 L65 104 L35 104 L35 66
+             L33 89 L20 86 L24 54 Q26 45 34 43 Z"/>
+    <path d="M35 104 L65 104 L64 143 L53 143 L50 118 L47 143 L36 143 Z"/>
+  </g>
+</svg>`;
+}
+
+/** Two people and an arrow: the outfit swap, which is otherwise the hardest to picture. */
+function swapPair() {
+  return `
+<div class="fig-pair">
+  <div class="fig-slot"><div class="fig-cap">body</div>${person('body', 0.62)}</div>
+  <div class="fig-arrow" aria-hidden="true">
+    <svg viewBox="0 0 40 30" width="34" height="26">
+      <path d="M4 15 H30 M23 8 L31 15 L23 22" fill="none" stroke="currentColor"
+            stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </div>
+  <div class="fig-slot"><div class="fig-cap">clothes</div>${person('clothes', 0.62)}</div>
+</div>`;
+}
+
+/** One original plus copies alongside it -- "these coexist, nothing is overwritten". */
+function copies() {
+  return `
+<div class="fig-pair fig-copies">
+  <div class="fig-slot">${person('all', 0.52)}</div>
+  <div class="fig-slot fig-ghost fig-d1">${person('clothes', 0.52)}</div>
+  <div class="fig-slot fig-ghost fig-d2">${person('clothes', 0.52)}</div>
+</div>`;
+}
+
+/** One person whose clothing cycles colour -- "this replaces what everyone sees". */
+function recolour() {
+  return `<div class="fig-pair fig-recolour"><div class="fig-slot">${person('clothes', 0.62)}</div></div>`;
+}
+
+const ART = { variants: copies, replace: recolour, swap: swapPair };
+
+
 // ===== src/ui/wizard.js =====
 // Step 0 -- "I have no idea where to start".
 //
-// The hardest part of this pipeline was never the painting, it was knowing that characters
-// exist under names like `vz_hum_solano`, that some clone cleanly and some come out with a
-// flattened face, and what to type to get one out of the game. All of that is knowable in
-// advance, so this asks two questions and then writes the command out.
+// This used to be one long panel holding every question, every caveat and both commands at
+// once. All of it was correct and all of it was on screen, which is precisely why it did
+// not work: a beginner cannot tell which sentence applies to them right now, so they read
+// none of them and ask instead. Density is the bug.
+//
+// So it is a rail now (see rail.js): one question open, finished ones collapsed to a tick,
+// later ones visibly locked. Choices are cards with a little figure showing what the choice
+// actually does, because "whose BODY" versus "whose clothes" is read from a picture by
+// people who will not read the sentence. And every point where the user has to go and do
+// something outside the tool ends with the tool CHECKING their work rather than wishing
+// them luck.
 
 
 let CAT = null;
 let onPick = () => {};
+let onNeedBundle = null;
+let rail = null;
 
 function setCatalogue(c) { CAT = c; }
 function onDonorPicked(fn) { onPick = fn; }
+/** app.js supplies the folder reader so the wizard can verify a drop before advancing. */
+function setBundleLoader(fn) { onNeedBundle = fn; }
 
 /**
  * Everything the tool can actually load.
@@ -1426,336 +1715,356 @@ function allCharacters() {
   return CAT.donors.map((d) => ({ ...d, kind: 'clone' }));
 }
 
+const GOALS = {
+  variants: {
+    title: 'Add new outfits',
+    sub: 'Extra skins that sit alongside the original. Nothing in the game changes until you choose to wear one.',
+    bodyQ: 'Which character?',
+  },
+  replace: {
+    title: 'Change how someone looks',
+    sub: "Repaint a character's own textures. Everyone who wears them changes.",
+    bodyQ: 'Which character?',
+  },
+  swap: {
+    title: "Wear someone else's outfit",
+    sub: 'Put one character\'s clothing onto another. No painting at all — the tool does the work.',
+    bodyQ: 'Whose body are you dressing?',
+  },
+};
+
+const W = { goal: null, body: null, donor: null, outDir: 'C:\\mercs2-skins' };
+
 function buildWizard(root) {
-  const chars = allCharacters();
-  root.innerHTML = '';
+  rail = new Rail(root);
+  W.goal = W.body = W.donor = null;
+  // The rail ending is the one moment the user could be left wondering where to look, so
+  // take them to the panel that just appeared instead of hoping they scroll.
+  rail.onFinish = () => {
+    const t = document.getElementById('step-edit');
+    if (t && !t.hidden) setTimeout(() => t.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
+  };
 
-  // --- goal ---
-  root.appendChild(el('div', 'wz-q', 'What do you want to do?'));
-  const goal = el('div', 'wz-opts');
-  for (const [id, title, sub] of [
-    ['variants', 'Add new outfits', 'Several skins that coexist with the original. Nothing in the game changes unless you wear one.'],
-    ['replace', 'Change how someone looks', "Replace a character's own textures. Everyone wearing them changes."],
-    ['swap', 'Wear someone else\'s outfit', 'Put another character\'s clothing onto this one. No painting at all — the tool does the work.'],
-  ]) {
-    const b = el('button', 'wz-opt');
-    b.dataset.goal = id;
-    b.appendChild(el('div', 'wz-opt-t', title));
-    b.appendChild(el('div', 'wz-opt-s', sub));
-    b.addEventListener('click', () => { root.dataset.goal = id; render(); });
-    goal.appendChild(b);
-  }
-  root.appendChild(goal);
-
-  const rest = el('div');
-  rest.id = 'wz-rest';
-  root.appendChild(rest);
-
-  function render() {
-    const g = root.dataset.goal;
-    for (const b of goal.querySelectorAll('.wz-opt')) b.classList.toggle('sel', b.dataset.goal === g);
-    if (!g) { rest.innerHTML = ''; return; }
-    // Every goal needs a character the workshop can export, and allCharacters() already
-    // guarantees that, so all three goals see the same list.
-    const list = chars;
-
-    rest.innerHTML = '';
-    rest.appendChild(el('div', 'wz-q',
-      g === 'swap' ? 'Whose BODY are you dressing?' : 'Which character?'));
-
-    if (g === 'swap') {
-      rest.appendChild(el('div', 'wz-note',
-        'Pick the character you want to BE — their body, face and build. You will pick whose '
-        + 'clothes they wear in a moment. The two do not need matching texture layouts: the '
-        + 'tool re-maps the clothing through the 3D body, so any pair works.'));
-    }
-
-    if (g === 'variants') {
-      const safe = list.filter((c) => c.blocks === 1).length;
-      rest.appendChild(el('div', 'wz-note',
-        `${list.length} characters have a model of their own and can host new outfits. `
-        + `${safe} of them are single-block, meaning a clone keeps full detail at every `
-        + 'distance — those are listed first and marked ✓. The rest are two-block: cloning '
-        + 'one works, but it loses its finer geometry and the face visibly flattens.'));
-    }
-
-    // Whether a ready-made template exists is the single most useful thing to know before
-    // choosing, since it decides whether you can start painting now or have to install the
-    // toolchain first. Marking it in the option label saves selecting each one to find out.
-    const withTpl = list.filter((c) => c.template && c.template.length).length;
-    if (withTpl) {
-      rest.appendChild(el('div', 'wz-note',
-        `${withTpl} of these ${list.length} have ready-made templates, marked ✓ — pick one `
-        + 'of those and you can start painting immediately, with no game tools at all.'));
-    }
-
-    const sel = el('select');
-    sel.id = 'wz-char';
-    const byFaction = {};
-    for (const c of list) (byFaction[c.faction] = byFaction[c.faction] || []).push(c);
-    const ph0 = el('option', null, '— choose —');
-    ph0.value = '';
-    sel.appendChild(ph0);
-    for (const f of Object.keys(byFaction).sort()) {
-      const og = document.createElement('optgroup');
-      og.label = f;
-      // Clone-safe first (only meaningful under "add outfits"), then template-ready, so
-      // the options that will actually work well are not buried under ones that will not.
-      const sorted = [...byFaction[f]].sort((a, b) =>
-        (a.blocks === 1 ? 0 : 1) - (b.blocks === 1 ? 0 : 1)
-        || (b.template ? 1 : 0) - (a.template ? 1 : 0)
-        || a.name.localeCompare(b.name));
-      for (const c of sorted) {
-        const n = (c.template || []).length;
-        const bits = [];
-        if (c.blocks === 1) bits.push('✓ full detail');
-        else if (c.blocks === 2) bits.push('⚠ loses detail if cloned');
-        if (n) bits.push(`${n} template${n === 1 ? '' : 's'}`);
-        const parts = c.sheets.length ? c.sheets.map((s) => s.part).join(', ') : 'no own sheets';
-        const o = el('option', null, `${c.name}   (${parts})   ${bits.join(' · ')}`);
-        o.value = c.name;
-        og.appendChild(o);
-      }
-      sel.appendChild(og);
-    }
-    rest.appendChild(sel);
-
-    const detail = el('div');
-    detail.id = 'wz-detail';
-    rest.appendChild(detail);
-    sel.addEventListener('change', () => {
-      const c = list.find((x) => x.name === sel.value);
-      renderDetail(detail, c, g);
-      if (c) onPick(c, g);
-    });
-  }
-
-  render();
+  rail.add('goal', 'What do you want to do?', stepGoal,
+    () => (W.goal ? GOALS[W.goal].title : ''));
+  rail.draw();
+  return rail;
 }
 
-function renderDetail(root, c, goal) {
-  root.innerHTML = '';
-  if (!c) return;
+// ---------------------------------------------------------------- 1. goal
+function stepGoal(body) {
+  const cards = el('div', 'cards');
+  for (const id of ['variants', 'replace', 'swap']) {
+    const g = GOALS[id];
+    const b = el('button', 'card' + (W.goal === id ? ' sel' : ''));
+    b.type = 'button';
+    const art = el('div', 'card-art');
+    art.innerHTML = ART[id]();
+    b.appendChild(art);
+    b.appendChild(el('div', 'card-t', g.title));
+    b.appendChild(el('div', 'card-s', g.sub));
+    b.addEventListener('click', () => {
+      W.goal = id;
+      W.body = W.donor = null;
+      buildRest();
+      rail.complete('goal');
+    });
+    cards.appendChild(b);
+  }
+  body.appendChild(cards);
+}
 
+/** The remaining steps depend on the goal, so they are rebuilt whenever it changes. */
+function buildRest() {
+  rail.truncateAfter('goal');
+  rail.add('body', GOALS[W.goal].bodyQ, stepBody, () => W.body && W.body.name);
+  if (W.goal === 'swap') {
+    rail.add('donor', 'Whose clothes do you want?', stepDonor, () => W.donor && W.donor.name);
+  }
+  rail.add('export', 'Get the files out of the game', stepExport, () => 'exported');
+  rail.add('drop', W.goal === 'swap' ? 'Load the body folder' : 'Load the folder',
+    (b) => stepDrop(b, 'body'), () => (W.loadedBody || ''));
+  if (W.goal === 'swap') {
+    rail.add('drop2', 'Load the clothes folder', (b) => stepDrop(b, 'donor'),
+      () => (W.loadedDonor || ''));
+  }
+}
+
+// ---------------------------------------------------------------- 2/3. pick people
+function characterPicker(body, { lit, note, exclude, onChoose, current }) {
+  const wrap = el('div', 'picker');
+  const left = el('div');
+
+  left.appendChild(el('p', null, note));
+
+  const list = allCharacters().filter((c) => !exclude || c.name !== exclude.name);
+  const sel = el('select');
+  sel.id = lit === 'body' ? 'wz-char' : 'wz-donor';
+  const ph = el('option', null, '— choose —');
+  ph.value = '';
+  sel.appendChild(ph);
+
+  const byF = {};
+  for (const c of list) (byF[c.faction] = byF[c.faction] || []).push(c);
+  for (const f of Object.keys(byF).sort()) {
+    const og = document.createElement('optgroup');
+    og.label = f;
+    // Clone-safe first, then template-ready: the options that will work well should not be
+    // buried under ones that will not.
+    const sorted = [...byF[f]].sort((a, b) =>
+      (a.blocks === 1 ? 0 : 1) - (b.blocks === 1 ? 0 : 1)
+      || (b.template ? 1 : 0) - (a.template ? 1 : 0)
+      || a.name.localeCompare(b.name));
+    for (const c of sorted) {
+      const own = c.sheets.filter((s) => s.part === 'ub' || s.part === 'lb')
+        .map((s) => s.part).join(', ');
+      const bits = [];
+      if (lit === 'body' && c.blocks === 1) bits.push('✓ full detail');
+      else if (lit === 'body') bits.push('⚠ loses detail if cloned');
+      bits.push(own ? `own ${own}` : "wears another's textures");
+      const o = el('option', null, `${c.name}   ${bits.join(' · ')}`);
+      o.value = c.name;
+      if (current && current.name === c.name) o.selected = true;
+      og.appendChild(o);
+    }
+    sel.appendChild(og);
+  }
+  left.appendChild(sel);
+
+  const detail = el('div');
+  left.appendChild(detail);
+  wrap.appendChild(left);
+
+  const fig = el('div', 'picker-fig');
+  fig.innerHTML = person(lit, 0.8);
+  fig.appendChild(el('div', 'fig-cap', lit === 'body' ? 'the body you become' : 'the clothes you wear'));
+  wrap.appendChild(fig);
+  body.appendChild(wrap);
+
+  sel.addEventListener('change', () => {
+    const c = list.find((x) => x.name === sel.value);
+    detail.innerHTML = '';
+    if (!c) return;
+    detail.appendChild(describe(c, lit));
+    const go = el('button', 'btn', 'Use ' + c.name);
+    go.addEventListener('click', () => onChoose(c));
+    const act = el('div', 'step-actions');
+    act.appendChild(go);
+    detail.appendChild(act);
+  });
+  if (current) sel.dispatchEvent(new Event('change'));
+}
+
+function describe(c, lit) {
+  const box = el('div');
   const sheets = c.sheets.map((s) => `${s.part}${s.size ? ' ' + s.size : ''}`).join(' · ');
-  root.appendChild(el('div', 'wz-sheets', `Sheets: ${sheets}`));
-
-  // Clone-safety matters for the swap too: a swapped outfit shipped as a NEW asset clones
-  // the body's model, so a two-block body flattens exactly as it would for a variant.
-  if (goal === 'variants' || goal === 'swap') {
+  box.appendChild(el('div', 'wz-sheets', `Sheets: ${sheets || 'none of its own'}`));
+  if (lit === 'body') {
     if (c.blocks === 1) {
-      root.appendChild(el('div', 'wz-ok',
-        '✓ Clone-safe. This character keeps all its geometry in one place, so a copy of it '
+      box.appendChild(el('div', 'wz-ok',
+        '✓ Keeps full detail. All of this character\'s geometry is in one place, so a copy '
         + 'looks exactly as sharp as the original.'));
-    } else if (c.blocks === 2) {
-      root.appendChild(el('div', 'wz-warn',
-        '⚠ Cloning this one costs detail. Its finer geometry lives in a second block that a '
-        + 'clone cannot carry, so your version renders its coarsest tier at every distance — '
-        + 'the face visibly flattens. It still works, and reskinning it in place instead '
-        + 'avoids the problem entirely.'));
-    }
-    if (!c.ownSheets) {
-      root.appendChild(el('div', 'wz-note',
-        'This character has no body textures of its own — it borrows another character\'s. '
-        + 'You can still clone it, but the textures you repoint belong to someone else, so '
-        + 'check the preview carefully.'));
+    } else {
+      box.appendChild(el('div', 'wz-warn',
+        '⚠ A copy of this one loses detail. Its finer geometry lives in a second block a '
+        + 'copy cannot carry, so it renders its coarsest version at every distance and the '
+        + 'face visibly flattens. Fine if you are repainting it in place.'));
     }
   }
-
-  // --- the no-setup path ---
-  // Painting a sheet needs a template far more urgently than it needs the game's artwork,
-  // and templates carry no artwork so they can just be handed over. Someone can start
-  // designing right now and only install the toolchain when they have something to inject.
-  if (c.template && c.template.length) {
-    const n = c.template.length;
-    root.appendChild(el('div', 'wz-q', 'Start painting now — no install needed'));
-    root.appendChild(el('div', 'wz-note',
-      `${n} ready-made template${n === 1 ? '' : 's'} for this character: every UV island `
-      + 'filled flat and coloured by the body part that drives it, so you can see what you '
-      + 'are painting. Open one in any image editor and go. You only need the game tools '
-      + 'later, to put the result back in.'));
-    // The catalogue lists sheets a character OWNS by name; templates cover the sheets its
-    // model actually PAINTS at the finest detail level. Those differ on low-detail NPCs
-    // that borrow a shared body sheet, and the gap is confusing unless it is named.
-    const painted = new Set(c.template.map((f) => f.replace('_SAFE.png', '')));
-    const missing = c.sheets.filter((s) => !painted.has(s.name)).map((s) => s.part);
-    if (missing.length) {
-      root.appendChild(el('div', 'wz-note',
-        `No template for its ${missing.join(', ')} sheet${missing.length === 1 ? '' : 's'} — `
-        + 'this model does not paint them at its finest detail level, usually because it '
-        + 'borrows a shared body texture. Export it below to work on those.'));
-    }
-    const grid = el('div', 'wz-tpl');
-    for (const f of c.template) {
-      const a = el('a', 'wz-tpl-a', f.replace(c.name + '_', '').replace('_SAFE.png', ''));
-      a.href = `templates/${c.name}/${f}`;
-      a.target = '_blank';
-      a.rel = 'noopener';
-      grid.appendChild(a);
-    }
-    root.appendChild(grid);
-    const leg = el('a', 'wz-note', 'colour legend →');
-    leg.href = `templates/${c.name}/_LEGEND.png`;
-    leg.target = '_blank';
-    leg.rel = 'noopener';
-    leg.style.display = 'inline-block';
-    root.appendChild(leg);
-  } else {
-    root.appendChild(el('div', 'wz-note',
-      'No ready-made template for this character yet — export it below and the tool will '
-      + 'draw the UV layout over its real textures, which works just as well.'));
+  if (!c.sheets.some((s) => s.part === 'ub' || s.part === 'lb')) {
+    box.appendChild(el('div', 'wz-note',
+      'Its textures are named after another character — it wears someone else\'s kit. That '
+      + 'still exports and still works here; you just get the outfit it is seen in.'));
   }
+  return box;
+}
 
-  // --- who is lending the clothes ---
-  // Without this the second command reads `<the_character_whose_clothes_you_want>` and the
-  // user has to go and find a name that this page already knows. The pick does not change
-  // what the tool does -- it only fills the command in -- but that is the whole friction.
-  let donorSel = null;
-  if (goal === 'swap') {
-    // Any exportable character is a valid donor. "Owns its own sheets" is NOT the test:
-    // a character whose sheets are named after somebody else still exports a full bundle
-    // with textures -- ch_hum_starter02 is catalogued as owning nothing and ships 18 of
-    // them -- and the outfit you copy is simply the one it wears in game. Being clonable
-    // is not the test either, since only the donor's artwork and mesh are read.
-    const wardrobe = allCharacters().filter((x) => x.name !== c.name);
-    root.appendChild(el('div', 'wz-q', 'Whose clothes?'));
-    root.appendChild(el('div', 'wz-note',
-      `Any of these ${wardrobe.length} can lend an outfit — being clonable does not matter, `
-      + 'because only their artwork and body shape are read. Characters marked "wears '
-      + 'another character\'s textures" work too; you get the outfit they are seen in.'));
-    donorSel = el('select');
-    donorSel.id = 'wz-donor';
-    const byF = {};
-    for (const x of wardrobe) (byF[x.faction] = byF[x.faction] || []).push(x);
-    // An <option> with no value attribute reports its TEXT as its value, so without this
-    // the placeholder reads back as "— choose —" and lands in the generated command.
-    const ph = el('option', null, '— choose —');
-    ph.value = '';
-    donorSel.appendChild(ph);
-    for (const f of Object.keys(byF).sort()) {
-      const og = document.createElement('optgroup');
-      og.label = f;
-      for (const x of byF[f].sort((a, b) => a.name.localeCompare(b.name))) {
-        const own = x.sheets.filter((s) => s.part === 'ub' || s.part === 'lb')
-          .map((s) => s.part).join(', ');
-        const o = el('option', null,
-          `${x.name}   ${own ? `(own ${own})` : "(wears another character's textures)"}`);
-        o.value = x.name;
-        og.appendChild(o);
-      }
-      donorSel.appendChild(og);
-    }
-    root.appendChild(donorSel);
-  }
+function stepBody(body) {
+  characterPicker(body, {
+    lit: 'body',
+    current: W.body,
+    note: W.goal === 'swap'
+      ? 'Pick the character you want to BE — their body, face and build. You will pick whose clothes they wear next.'
+      : 'Pick the character you want to work on.',
+    onChoose: (c) => { W.body = c; onPick(c, W.goal); rail.complete('body'); },
+  });
+}
 
-  // --- the command ---
-  root.appendChild(el('div', 'wz-q', 'Get the character out of the game'));
-  root.appendChild(el('div', 'wz-note',
-    'You need mercs2_workshop from the community toolchain (link below). Run it with no '
-    + 'arguments first — it opens a browser where you can look at every character in 3D and '
-    + 'read its name, which is by far the easiest way to find the one you actually want. '
-    + 'The names in the dropdown above are the same ones it shows.'));
+function stepDonor(body) {
+  characterPicker(body, {
+    lit: 'clothes',
+    current: W.donor,
+    exclude: W.body,
+    note: 'Pick whoever is wearing the outfit you want. The two do not need matching texture '
+      + 'layouts — the tool re-maps the clothing through the 3D body, so any pair works.',
+    onChoose: (c) => { W.donor = c; rail.complete('donor'); },
+  });
+}
 
-  const outWrap = el('label', 'wz-field');
-  outWrap.appendChild(el('span', null, 'Where should the files go?'));
+// ---------------------------------------------------------------- 4. export
+function stepExport(body) {
+  const names = W.goal === 'swap' ? [W.body.name, W.donor.name] : [W.body.name];
+
+  body.appendChild(el('p', null,
+    names.length > 1
+      ? 'Two characters means two folders. Run both of these, then come back.'
+      : 'Run this once, then come back.'));
+
+  const f = el('label', 'wz-field');
+  f.appendChild(el('span', null, 'Where should the files go?'));
   const out = el('input');
   out.type = 'text';
-  out.id = 'wz-out';
-  out.value = 'C:\\mercs2-skins';
+  out.value = W.outDir;
   out.spellcheck = false;
-  outWrap.appendChild(out);
-  root.appendChild(outWrap);
+  f.appendChild(out);
+  body.appendChild(f);
 
   const pre = el('pre');
-  pre.id = 'wz-cmd';
-  root.appendChild(pre);
-
-  const copy = el('button', 'btn ghost', 'Copy command');
-  copy.addEventListener('click', () => {
-    navigator.clipboard.writeText(pre.textContent).then(
-      () => { copy.textContent = 'Copied'; setTimeout(() => (copy.textContent = 'Copy command'), 1400); },
-      () => { copy.textContent = 'Copy failed — select it manually'; });
-  });
-  root.appendChild(copy);
-
+  body.appendChild(pre);
   const upd = () => {
-    const dir = (out.value || 'C:\\mercs2-skins').replace(/[\\/]+$/, '');
-    // `.\` is required: PowerShell refuses to run an executable from the current directory
-    // without it, and the instructions above tell people to cd into the tool's folder.
-    const run = (n) => `.\\mercs2_workshop --export-bundle ${n} --out "${dir}"`;
-    pre.textContent = goal === 'swap'
-      // The swap needs TWO bundles, and finding that out one command at a time is the most
-      // annoying possible way to learn it. Emit both.
-      ? `${run(c.name)}\n${run(donorSel && donorSel.value ? donorSel.value
-        : '<pick whose clothes above>')}`
-      : run(c.name);
+    W.outDir = (out.value || 'C:\\mercs2-skins').replace(/[\\/]+$/, '');
+    // `.\` is required: PowerShell will not run an executable out of the current directory
+    // without it, and the instructions tell people to cd into the tool's folder.
+    pre.textContent = names
+      .map((n) => `.\\mercs2_workshop --export-bundle ${n} --out "${W.outDir}"`).join('\n');
   };
   out.addEventListener('input', upd);
-  if (donorSel) donorSel.addEventListener('change', upd);
   upd();
 
-  root.appendChild(el('div', 'wz-note', goal === 'swap'
-    ? `Run it twice — once for ${c.name} and once for whoever owns the outfit. Each writes its `
-      + 'own folder containing manifest.json, model.gltf, model.bin, textures and raw. Drop '
-      + `${c.name}'s folder in step 1, then the other one in step 1b.`
-    : `That writes ${'"'}${'{'}folder${'}'}\\${c.name}\\${'"'} containing manifest.json, model.gltf, model.bin, `
-      + 'a textures folder and a raw folder. Drag that whole character folder onto the drop '
-      + 'zone below — not the individual files.'));
+  const act = el('div', 'step-actions');
+  const copy = el('button', 'btn ghost', 'Copy');
+  copy.addEventListener('click', () => {
+    navigator.clipboard.writeText(pre.textContent).then(
+      () => { copy.textContent = 'Copied'; setTimeout(() => (copy.textContent = 'Copy'), 1400); },
+      () => { copy.textContent = 'Select it manually'; });
+  });
+  act.appendChild(copy);
+  const done = el('button', 'btn', "I've run it →");
+  done.addEventListener('click', () => rail.complete('export'));
+  act.appendChild(done);
+  body.appendChild(act);
 
-  if (goal === 'swap') {
-    root.appendChild(el('div', 'wz-note',
-      'Any character with its own textures can be the donor, including ones that cannot be '
-      + 'cloned — you are only borrowing their artwork, not their model. So the whole roster '
-      + 'is available as a wardrobe.'));
-  }
+  body.appendChild(el('div', 'wz-note',
+    `Each command writes a folder: ${names.map((n) => `${W.outDir}\\${n}\\`).join('  and  ')}. `
+    + 'You will drag those in next — the tool checks each one before letting you continue, '
+    + 'so you do not have to be sure you got it right.'));
 
-  // --- troubleshooting ---
-  const tro = el('details', 'wz-tro');
-  tro.appendChild(el('summary', null, "It didn't work — what usually goes wrong"));
+  const tips = el('details', 'wz-tro');
+  tips.appendChild(el('summary', null, 'The command did not work'));
   const ul = el('ul');
   for (const [q, a] of [
+    ['"not recognized" or nothing happens',
+      'You are not in the folder that holds mercs2_workshop.exe. cd into it first, or swap '
+      + 'the .\\ for the full path to the exe. On Windows that leading .\\ is required.'],
     ['"no model ASET for 0x…"',
-      'That name has no model of its own, so the workshop has nothing to export — it is a '
-      + 'texture set belonging to a character built from shared sub-entries. 67 such names '
-      + 'exist in the game and none of them can be used here, which is why none of them '
-      + 'appear in the pickers above. Every name this page offers has been checked against '
-      + 'the model table. If you typed a name yourself, pick it from the dropdown instead.'],
-    ['The command does nothing / "not recognised"',
-      'You are not in the folder holding mercs2_workshop.exe. cd into it first, or replace '
-      + 'the .\\ with the full path to the exe. The leading .\\ is required on Windows — '
-      + 'PowerShell will not run an executable from the current folder without it.'],
+      'That name has no model of its own and cannot be exported. Every name in the pickers '
+      + 'above has been checked, so this only happens if you typed one yourself.'],
     ['It cannot find vz.wad',
-      'Run it from your Mercenaries 2 install, or pass the game path. It reads the base WAD '
-      + 'from the install — it never modifies it.'],
-    ['I dropped the folder and the tool says it is not a bundle',
-      'Drop the folder named after the character, the one containing manifest.json. Dropping '
-      + 'its parent, or the textures folder on its own, will not work.'],
-    ['The character "has no sheets of its own" — is it still usable?',
-      'Yes. That label means its textures are named after another character, not that it '
-      + 'has none: the export still contains every texture its model draws with. It makes '
-      + 'a perfectly good body and a perfectly good outfit donor. The one thing to know is '
-      + 'that reskinning those textures in place also changes whoever else uses them.'],
-    ['My skin loaded but the face looks flattened',
-      'You cloned a two-block character. 38 of the 85 characters with a model are '
-      + 'single-block and keep full detail when cloned — those are the ones marked ✓. '
-      + 'See docs/LOD-CHAIN.md.'],
-    ['The swapped outfit looks smeared in places',
-      'The donor has no counterpart for part of that body — usually gear one character '
-      + 'carries and the other does not, like a backpack or webbing. Those areas take the '
-      + 'nearest colour available. The fit percentages in step 1b tell you which sheets are '
-      + 'affected; a donor with a similar build fixes it.'],
-    ['The game crashed to desktop when I wore it',
-      'The name did not resolve — the asset is not actually in your patch. Check the patch '
-      + 'merged correctly. There is no soft failure for a missing model.'],
+      'Run it from your Mercenaries 2 install, or pass the game path. It only ever reads '
+      + 'the base WAD — it never modifies your install.'],
+    ['I want all of them at once',
+      'tools\\extract_all.bat fetches the entire roster — 85 characters, about 20 minutes — '
+      + 'so you never have to run this again.'],
   ]) {
     const li = el('li');
     li.appendChild(el('b', null, q));
     li.appendChild(el('div', null, a));
     ul.appendChild(li);
   }
-  tro.appendChild(ul);
-  root.appendChild(tro);
+  tips.appendChild(ul);
+  body.appendChild(tips);
 }
+
+// ---------------------------------------------------------------- 5/6. load + verify
+function stepDrop(body, which) {
+  const want = which === 'body' ? W.body : W.donor;
+  body.appendChild(el('p', null,
+    `Drag in the folder named ${want.name} — the one containing manifest.json. `
+    + 'Not its parent, and not the files inside it.'));
+
+  const zone = el('label', 'drop');
+  const input = el('input');
+  input.type = 'file';
+  input.setAttribute('webkitdirectory', '');
+  input.setAttribute('directory', '');
+  input.multiple = true;
+  zone.appendChild(input);
+  zone.appendChild(el('b', null, `Drop ${want.name}`));
+  zone.appendChild(el('span', 'hint', `${W.outDir}\\${want.name}\\`));
+  body.appendChild(zone);
+
+  const out = el('div');
+  body.appendChild(out);
+
+  wireDrop(zone, input, async (files) => {
+    out.innerHTML = '';
+    if (!onNeedBundle) return;
+    let res;
+    try {
+      res = await onNeedBundle(files, which);
+    } catch (e) {
+      out.appendChild(verdict({
+        ok: false, title: 'That folder is not an export bundle',
+        lines: [{ k: 'what came in', v: `${files.length} file(s)`, ok: false }],
+        hint: (e && e.message ? e.message.split('\n')[0] : '')
+          + ' — drop the folder named after the character, the one with manifest.json in it.',
+      }));
+      return;
+    }
+
+    // ★ Check they dropped the RIGHT character, not just a valid one. Dropping the body
+    // twice, or the two folders the wrong way round, is the single easiest mistake to make
+    // here and produces a confusing result rather than an error.
+    const got = res.name;
+    const right = got.toLowerCase() === want.name.toLowerCase();
+    const sheets = res.sheets || 0;
+    const lines = [
+      { k: 'character', v: got, ok: right },
+      { k: 'expected', v: want.name },
+      { k: 'textures', v: `${res.textures} decoded`, ok: res.textures > 0 },
+      { k: 'body sheets', v: sheets ? `${sheets} painted` : 'none', ok: sheets > 0 },
+    ];
+    if (!right) {
+      out.appendChild(verdict({
+        ok: false, title: `That is ${got}, not ${want.name}`,
+        lines,
+        hint: which === 'donor'
+          ? 'You may have dropped the body folder again. The clothes folder is the second '
+            + 'character you exported.'
+          : 'Drop the folder for the character you picked, or go back and pick this one instead.',
+      }));
+      return;
+    }
+    if (!res.textures) {
+      out.appendChild(verdict({
+        ok: false, title: 'That bundle has no textures',
+        lines,
+        hint: 'The export is missing its textures folder. Re-run the command and drag the '
+          + 'whole character folder in, not just part of it.',
+      }));
+      return;
+    }
+    out.appendChild(verdict({
+      ok: true, title: `${got} loaded`,
+      lines: [
+        { k: 'textures', v: `${res.textures} decoded` },
+        { k: 'body sheets', v: `${sheets} painted` },
+        { k: 'geometry', v: `${res.tris.toLocaleString()} triangles` },
+      ],
+    }));
+    const act = el('div', 'step-actions');
+    const go = el('button', 'btn', 'Continue →');
+    go.addEventListener('click', () => {
+      if (which === 'body') { W.loadedBody = got; rail.complete('drop'); }
+      else { W.loadedDonor = got; rail.complete('drop2'); }
+      if (res.onContinue) res.onContinue();
+    });
+    act.appendChild(go);
+    out.appendChild(act);
+  });
+}
+
+const wizardState = W;
 
 
 // ===== src/transfer.js =====
@@ -2198,89 +2507,39 @@ function describeFit(stats, align) {
 // ===== src/ui/swap.js =====
 // "I just want to wear that guy's uniform."
 //
-// The whole panel exists because the intuitive version of this does not work. Copying the
+// The whole feature exists because the intuitive version of this does not work. Copying the
 // donor's sheet over the target's and renaming it fails: characters do not share UV
 // layouts, so the sleeves land on the thighs (see src/transfer.js for the measurements).
 // What this does instead is re-map the donor's clothing through 3D into the target's own
 // layout, which works for ANY pair rather than only for same-family variants.
 //
-// The user-facing consequence is that this needs TWO export bundles, not one, and saying
-// so up front is most of the job.
+// The wizard drives the flow and verifies both folders; this only runs the transfer and
+// explains the result.
 
-
-let CTX = null;
 
 /**
- * @param {object} o.parseFolder  (files) -> {bundle, images}   -- shared with the main load
- * @param {object} o.getTarget    () -> the currently loaded bundle (whose BODY is used)
- * @param {object} o.getSizes     () -> Map hash -> {width,height} for the target
- * @param {Function} o.onApply    (Map hash -> ImageData) once the swap is computed
- * @param {Function} o.status
+ * @returns {{results: Map, card: HTMLElement}}
  */
-function initSwap(o) {
-  CTX = o;
-  wireDrop($('#swap-drop'), $('#swap-input'), (files) => run(files).catch(o.fail));
-}
-
-/** Show or hide the whole step, and tailor its copy to the character already chosen. */
-function setSwapVisible(on, targetName) {
-  const sec = $('#step-swap');
-  if (!sec) return;
-  sec.hidden = !on;
-  if (on) {
-    $('#swap-intro').textContent = targetName
-      ? `You are wearing ${targetName}'s body. Now drop the character whose CLOTHES you want — `
-        + 'a second export bundle, exported exactly the same way.'
-      : 'Drop the character whose CLOTHES you want — a second export bundle.';
-  }
-}
-
-async function run(files) {
-  const target = CTX.getTarget();
-  if (!target) throw new Error('Load the character wearing the outfit first (step 1).');
-
-  CTX.status('reading the donor bundle…');
-  const { bundle: donor, images: donorImages } = await CTX.parseFolder(files);
-  if (donor.name === target.name) {
-    throw new Error(`That is the same character (${donor.name}). The donor has to be a `
-      + 'different character — the one whose clothes you want.');
-  }
+function runSwap({ target, donor, donorImages, targetSizes }) {
   if (!bodySheets(donor).length) {
-    throw new Error(`${donor.name} has no diffuse body sheets of its own, so it has no `
-      + 'clothing to give. Pick a character that owns its textures.');
+    throw new Error(`${donor.name} has no diffuse body sheets, so it has no clothing to give.`);
   }
-
-  $('#swap-name').textContent = `${donor.name} → ${target.name}`;
-  CTX.status(`re-mapping ${donor.name}'s clothing onto ${target.name}…`);
-
-  // Yield first so the status paints -- the transfer is a few hundred thousand nearest
-  // point queries and will block the frame.
-  await new Promise((r) => setTimeout(r, 16));
-
   const t0 = performance.now();
   const { results, align, donorSamples } = transferOutfit({
-    target,
-    donor,
-    donorImages,
-    targetSizes: CTX.getSizes(),
+    target, donor, donorImages, targetSizes,
   });
   const ms = Math.round(performance.now() - t0);
-
   if (!results.size) throw new Error('Nothing to transfer — the target has no diffuse sheets.');
-  CTX.onApply(results);
-  report(results, align, donor, target, donorSamples, ms);
-  CTX.status('');
+  return { results, card: report(results, align, donor, target, donorSamples, ms) };
 }
 
 function report(results, align, donor, target, donorSamples, ms) {
-  const box = $('#swap-report');
-  box.innerHTML = '';
-  box.hidden = false;
+  const box = el('div');
 
   box.appendChild(el('div', 'wz-note',
     `Re-mapped ${results.size} sheet${results.size === 1 ? '' : 's'} in ${ms} ms against `
     + `${donorSamples.toLocaleString()} surface points on ${donor.name}. `
-    + `Both characters are rigged to the same skeleton in the same pose `
+    + 'Both characters are rigged to the same skeleton in the same pose '
     + `(${align.targetHeight.toFixed(2)} vs ${align.donorHeight.toFixed(2)} units tall), so `
     + 'their bodies already line up and nothing needed rescaling.'));
 
@@ -2292,10 +2551,9 @@ function report(results, align, donor, target, donorSamples, ms) {
   }
 
   // Per-sheet fit. The p99 correspondence error is the honest reading: it is the parts of
-  // the target body that the donor simply has no counterpart for.
+  // the target body the donor has no counterpart for.
   const tbl = el('div', 'swap-rows');
-  const sheets = bodySheets(target);
-  for (const tex of sheets) {
+  for (const tex of bodySheets(target)) {
     const r = results.get(tex.hash);
     if (!r) continue;
     const fit = describeFit(r.stats, align);
@@ -2314,13 +2572,13 @@ function report(results, align, donor, target, donorSamples, ms) {
     box.appendChild(el('div', 'wz-note',
       'A poor fit almost always means the two characters carry different gear — a backpack, '
       + 'webbing or a helmet on one that the other does not have. The body underneath still '
-      + 'transfers correctly; it is the extra hardware that has nowhere to come from. Check '
-      + 'the 3D preview before exporting.'));
+      + 'transfers correctly; it is the extra hardware that has nowhere to come from.'));
   }
 
   box.appendChild(el('div', 'wz-note',
-    'These sheets are now loaded as your edits — look through them in step 2, touch anything '
-    + 'up (the recolour still works), then export from step 3 exactly as normal.'));
+    'These sheets are loaded as your edits — look through them below, touch anything up, '
+    + 'then export.'));
+  return box;
 }
 
 
@@ -2794,22 +3052,27 @@ export async function boot() {
       S.skinName = sanitizeAssetName(c.name + '_custom');
       if ($('#skin-name')) $('#skin-name').value = S.skinName;
     }
-    setSwapVisible(goal === 'swap' && !!S.bundle, S.bundle && S.bundle.name);
   });
 
-  initSwap({
-    parseFolder,
-    getTarget: () => S.bundle,
-    getSizes: () => new Map([...S.textures].map(([h, r]) => [h, { width: r.width, height: r.height }])),
-    onApply: applyTransfer,
-    status,
-    fail,
+  // The wizard owns the drop zones now, and verifies each folder before letting anyone
+  // move past it. It hands the parsed bundle back so the rest of the tool can use it.
+  setBundleLoader(async (files, which) => {
+    const { bundle, images, sorted } = await parseFolder(files);
+    return {
+      name: bundle.name,
+      textures: images.size,
+      sheets: bodySheets(bundle).length,
+      tris: bundle.textures.reduce((n, t) => n + t.triangles, 0),
+      // Only committed when they press Continue, so a wrong folder leaves no trace.
+      onContinue: () => {
+        if (which === 'donor') applyDonor(bundle, images).catch(fail);
+        else adopt(bundle, images, sorted);
+      },
+    };
   });
 
   preview = new Preview($('#preview'));
   if (!preview.ok) $('#preview-note').textContent = 'WebGL unavailable — the 3D preview is disabled.';
-
-  wireDrop($('#drop'), $('#bundle-input'), (files) => load(files).catch(fail));
   $('#show-uv').addEventListener('change', (e) => { S.showUV = e.target.checked; drawTexture(); });
   $('#replace-input').addEventListener('change', (e) => replaceTexture(e.target.files[0]).catch(fail));
   $('#skin-name').addEventListener('input', (e) => { S.skinName = e.target.value; renderExport(); });
@@ -2822,7 +3085,10 @@ export async function boot() {
   $('#btn-png').addEventListener('click', exportPng);
   wireRecolor();
   window.addEventListener('resize', () => preview.draw());
-  status('Drop an export-bundle folder to begin.');
+  // No standing instruction here any more -- the rail says what to do next, and a banner
+  // telling people to drop a folder before a drop zone exists is exactly the kind of
+  // stray instruction this redesign is trying to get rid of.
+  status('');
 }
 
 /** Read a dropped export-bundle folder into a bundle plus its decoded textures.
@@ -2853,9 +3119,8 @@ async function parseFolder(files) {
   return { bundle, images, sorted };
 }
 
-async function load(files) {
-  status('reading bundle…');
-  const { bundle, images, sorted } = await parseFolder(files);
+/** Take a verified bundle as the thing being edited. */
+function adopt(bundle, images, sorted) {
   S.bundle = bundle;
   S.files = sorted;
   S.textures.clear();
@@ -2869,11 +3134,34 @@ async function load(files) {
   $('#bundle-name').textContent =
     `${S.bundle.name} — ${S.bundle.textures.length} textures, ${S.bundle.prims.length} draw groups` +
     (S.bundle.skinned ? ', skinned' : '');
-  $('#step-edit').hidden = false;
-  $('#step-export').hidden = false;
-  setSwapVisible(S.wizardGoal === 'swap', S.bundle.name);
+  // On a swap the editing panels stay shut until the outfit has actually been applied --
+  // there is nothing useful to look at in between, and an empty half-built page is exactly
+  // the "now what?" moment this flow exists to remove.
+  const swapping = S.wizardGoal === 'swap';
+  $('#step-edit').hidden = swapping;
+  $('#step-export').hidden = swapping;
   select(S.bundle.textures[0]?.hash);
   renderList();
+  status('');
+}
+
+/** Second half of a swap: re-map the donor's clothing onto the body already loaded. */
+async function applyDonor(donor, donorImages) {
+  if (!S.bundle) throw new Error('Load the body folder first.');
+  status(`re-mapping ${donor.name}'s clothing onto ${S.bundle.name}…`);
+  await new Promise((r) => setTimeout(r, 16));
+  const report = runSwap({
+    target: S.bundle,
+    donor,
+    donorImages,
+    targetSizes: new Map([...S.textures].map(([h, r]) => [h, { width: r.width, height: r.height }])),
+  });
+  applyTransfer(report.results);
+  $('#step-edit').hidden = false;
+  $('#step-export').hidden = false;
+  $('#swap-report').hidden = false;
+  $('#swap-report').innerHTML = '';
+  $('#swap-report').appendChild(report.card);
   status('');
 }
 

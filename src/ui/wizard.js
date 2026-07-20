@@ -1,17 +1,30 @@
 // Step 0 -- "I have no idea where to start".
 //
-// The hardest part of this pipeline was never the painting, it was knowing that characters
-// exist under names like `vz_hum_solano`, that some clone cleanly and some come out with a
-// flattened face, and what to type to get one out of the game. All of that is knowable in
-// advance, so this asks two questions and then writes the command out.
+// This used to be one long panel holding every question, every caveat and both commands at
+// once. All of it was correct and all of it was on screen, which is precisely why it did
+// not work: a beginner cannot tell which sentence applies to them right now, so they read
+// none of them and ask instead. Density is the bug.
+//
+// So it is a rail now (see rail.js): one question open, finished ones collapsed to a tick,
+// later ones visibly locked. Choices are cards with a little figure showing what the choice
+// actually does, because "whose BODY" versus "whose clothes" is read from a picture by
+// people who will not read the sentence. And every point where the user has to go and do
+// something outside the tool ends with the tool CHECKING their work rather than wishing
+// them luck.
 
-import { $, el } from './dom.js';
+import { $, el, wireDrop } from './dom.js';
+import { Rail, verdict } from './rail.js';
+import { ART, person } from './figure.js';
 
 let CAT = null;
 let onPick = () => {};
+let onNeedBundle = null;
+let rail = null;
 
 export function setCatalogue(c) { CAT = c; }
 export function onDonorPicked(fn) { onPick = fn; }
+/** app.js supplies the folder reader so the wizard can verify a drop before advancing. */
+export function setBundleLoader(fn) { onNeedBundle = fn; }
 
 /**
  * Everything the tool can actually load.
@@ -31,333 +44,353 @@ export function allCharacters() {
   return CAT.donors.map((d) => ({ ...d, kind: 'clone' }));
 }
 
+const GOALS = {
+  variants: {
+    title: 'Add new outfits',
+    sub: 'Extra skins that sit alongside the original. Nothing in the game changes until you choose to wear one.',
+    bodyQ: 'Which character?',
+  },
+  replace: {
+    title: 'Change how someone looks',
+    sub: "Repaint a character's own textures. Everyone who wears them changes.",
+    bodyQ: 'Which character?',
+  },
+  swap: {
+    title: "Wear someone else's outfit",
+    sub: 'Put one character\'s clothing onto another. No painting at all — the tool does the work.',
+    bodyQ: 'Whose body are you dressing?',
+  },
+};
+
+const W = { goal: null, body: null, donor: null, outDir: 'C:\\mercs2-skins' };
+
 export function buildWizard(root) {
-  const chars = allCharacters();
-  root.innerHTML = '';
+  rail = new Rail(root);
+  W.goal = W.body = W.donor = null;
+  // The rail ending is the one moment the user could be left wondering where to look, so
+  // take them to the panel that just appeared instead of hoping they scroll.
+  rail.onFinish = () => {
+    const t = document.getElementById('step-edit');
+    if (t && !t.hidden) setTimeout(() => t.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
+  };
 
-  // --- goal ---
-  root.appendChild(el('div', 'wz-q', 'What do you want to do?'));
-  const goal = el('div', 'wz-opts');
-  for (const [id, title, sub] of [
-    ['variants', 'Add new outfits', 'Several skins that coexist with the original. Nothing in the game changes unless you wear one.'],
-    ['replace', 'Change how someone looks', "Replace a character's own textures. Everyone wearing them changes."],
-    ['swap', 'Wear someone else\'s outfit', 'Put another character\'s clothing onto this one. No painting at all — the tool does the work.'],
-  ]) {
-    const b = el('button', 'wz-opt');
-    b.dataset.goal = id;
-    b.appendChild(el('div', 'wz-opt-t', title));
-    b.appendChild(el('div', 'wz-opt-s', sub));
-    b.addEventListener('click', () => { root.dataset.goal = id; render(); });
-    goal.appendChild(b);
-  }
-  root.appendChild(goal);
-
-  const rest = el('div');
-  rest.id = 'wz-rest';
-  root.appendChild(rest);
-
-  function render() {
-    const g = root.dataset.goal;
-    for (const b of goal.querySelectorAll('.wz-opt')) b.classList.toggle('sel', b.dataset.goal === g);
-    if (!g) { rest.innerHTML = ''; return; }
-    // Every goal needs a character the workshop can export, and allCharacters() already
-    // guarantees that, so all three goals see the same list.
-    const list = chars;
-
-    rest.innerHTML = '';
-    rest.appendChild(el('div', 'wz-q',
-      g === 'swap' ? 'Whose BODY are you dressing?' : 'Which character?'));
-
-    if (g === 'swap') {
-      rest.appendChild(el('div', 'wz-note',
-        'Pick the character you want to BE — their body, face and build. You will pick whose '
-        + 'clothes they wear in a moment. The two do not need matching texture layouts: the '
-        + 'tool re-maps the clothing through the 3D body, so any pair works.'));
-    }
-
-    if (g === 'variants') {
-      const safe = list.filter((c) => c.blocks === 1).length;
-      rest.appendChild(el('div', 'wz-note',
-        `${list.length} characters have a model of their own and can host new outfits. `
-        + `${safe} of them are single-block, meaning a clone keeps full detail at every `
-        + 'distance — those are listed first and marked ✓. The rest are two-block: cloning '
-        + 'one works, but it loses its finer geometry and the face visibly flattens.'));
-    }
-
-    // Whether a ready-made template exists is the single most useful thing to know before
-    // choosing, since it decides whether you can start painting now or have to install the
-    // toolchain first. Marking it in the option label saves selecting each one to find out.
-    const withTpl = list.filter((c) => c.template && c.template.length).length;
-    if (withTpl) {
-      rest.appendChild(el('div', 'wz-note',
-        `${withTpl} of these ${list.length} have ready-made templates, marked ✓ — pick one `
-        + 'of those and you can start painting immediately, with no game tools at all.'));
-    }
-
-    const sel = el('select');
-    sel.id = 'wz-char';
-    const byFaction = {};
-    for (const c of list) (byFaction[c.faction] = byFaction[c.faction] || []).push(c);
-    const ph0 = el('option', null, '— choose —');
-    ph0.value = '';
-    sel.appendChild(ph0);
-    for (const f of Object.keys(byFaction).sort()) {
-      const og = document.createElement('optgroup');
-      og.label = f;
-      // Clone-safe first (only meaningful under "add outfits"), then template-ready, so
-      // the options that will actually work well are not buried under ones that will not.
-      const sorted = [...byFaction[f]].sort((a, b) =>
-        (a.blocks === 1 ? 0 : 1) - (b.blocks === 1 ? 0 : 1)
-        || (b.template ? 1 : 0) - (a.template ? 1 : 0)
-        || a.name.localeCompare(b.name));
-      for (const c of sorted) {
-        const n = (c.template || []).length;
-        const bits = [];
-        if (c.blocks === 1) bits.push('✓ full detail');
-        else if (c.blocks === 2) bits.push('⚠ loses detail if cloned');
-        if (n) bits.push(`${n} template${n === 1 ? '' : 's'}`);
-        const parts = c.sheets.length ? c.sheets.map((s) => s.part).join(', ') : 'no own sheets';
-        const o = el('option', null, `${c.name}   (${parts})   ${bits.join(' · ')}`);
-        o.value = c.name;
-        og.appendChild(o);
-      }
-      sel.appendChild(og);
-    }
-    rest.appendChild(sel);
-
-    const detail = el('div');
-    detail.id = 'wz-detail';
-    rest.appendChild(detail);
-    sel.addEventListener('change', () => {
-      const c = list.find((x) => x.name === sel.value);
-      renderDetail(detail, c, g);
-      if (c) onPick(c, g);
-    });
-  }
-
-  render();
+  rail.add('goal', 'What do you want to do?', stepGoal,
+    () => (W.goal ? GOALS[W.goal].title : ''));
+  rail.draw();
+  return rail;
 }
 
-function renderDetail(root, c, goal) {
-  root.innerHTML = '';
-  if (!c) return;
+// ---------------------------------------------------------------- 1. goal
+function stepGoal(body) {
+  const cards = el('div', 'cards');
+  for (const id of ['variants', 'replace', 'swap']) {
+    const g = GOALS[id];
+    const b = el('button', 'card' + (W.goal === id ? ' sel' : ''));
+    b.type = 'button';
+    const art = el('div', 'card-art');
+    art.innerHTML = ART[id]();
+    b.appendChild(art);
+    b.appendChild(el('div', 'card-t', g.title));
+    b.appendChild(el('div', 'card-s', g.sub));
+    b.addEventListener('click', () => {
+      W.goal = id;
+      W.body = W.donor = null;
+      buildRest();
+      rail.complete('goal');
+    });
+    cards.appendChild(b);
+  }
+  body.appendChild(cards);
+}
 
+/** The remaining steps depend on the goal, so they are rebuilt whenever it changes. */
+function buildRest() {
+  rail.truncateAfter('goal');
+  rail.add('body', GOALS[W.goal].bodyQ, stepBody, () => W.body && W.body.name);
+  if (W.goal === 'swap') {
+    rail.add('donor', 'Whose clothes do you want?', stepDonor, () => W.donor && W.donor.name);
+  }
+  rail.add('export', 'Get the files out of the game', stepExport, () => 'exported');
+  rail.add('drop', W.goal === 'swap' ? 'Load the body folder' : 'Load the folder',
+    (b) => stepDrop(b, 'body'), () => (W.loadedBody || ''));
+  if (W.goal === 'swap') {
+    rail.add('drop2', 'Load the clothes folder', (b) => stepDrop(b, 'donor'),
+      () => (W.loadedDonor || ''));
+  }
+}
+
+// ---------------------------------------------------------------- 2/3. pick people
+function characterPicker(body, { lit, note, exclude, onChoose, current }) {
+  const wrap = el('div', 'picker');
+  const left = el('div');
+
+  left.appendChild(el('p', null, note));
+
+  const list = allCharacters().filter((c) => !exclude || c.name !== exclude.name);
+  const sel = el('select');
+  sel.id = lit === 'body' ? 'wz-char' : 'wz-donor';
+  const ph = el('option', null, '— choose —');
+  ph.value = '';
+  sel.appendChild(ph);
+
+  const byF = {};
+  for (const c of list) (byF[c.faction] = byF[c.faction] || []).push(c);
+  for (const f of Object.keys(byF).sort()) {
+    const og = document.createElement('optgroup');
+    og.label = f;
+    // Clone-safe first, then template-ready: the options that will work well should not be
+    // buried under ones that will not.
+    const sorted = [...byF[f]].sort((a, b) =>
+      (a.blocks === 1 ? 0 : 1) - (b.blocks === 1 ? 0 : 1)
+      || (b.template ? 1 : 0) - (a.template ? 1 : 0)
+      || a.name.localeCompare(b.name));
+    for (const c of sorted) {
+      const own = c.sheets.filter((s) => s.part === 'ub' || s.part === 'lb')
+        .map((s) => s.part).join(', ');
+      const bits = [];
+      if (lit === 'body' && c.blocks === 1) bits.push('✓ full detail');
+      else if (lit === 'body') bits.push('⚠ loses detail if cloned');
+      bits.push(own ? `own ${own}` : "wears another's textures");
+      const o = el('option', null, `${c.name}   ${bits.join(' · ')}`);
+      o.value = c.name;
+      if (current && current.name === c.name) o.selected = true;
+      og.appendChild(o);
+    }
+    sel.appendChild(og);
+  }
+  left.appendChild(sel);
+
+  const detail = el('div');
+  left.appendChild(detail);
+  wrap.appendChild(left);
+
+  const fig = el('div', 'picker-fig');
+  fig.innerHTML = person(lit, 0.8);
+  fig.appendChild(el('div', 'fig-cap', lit === 'body' ? 'the body you become' : 'the clothes you wear'));
+  wrap.appendChild(fig);
+  body.appendChild(wrap);
+
+  sel.addEventListener('change', () => {
+    const c = list.find((x) => x.name === sel.value);
+    detail.innerHTML = '';
+    if (!c) return;
+    detail.appendChild(describe(c, lit));
+    const go = el('button', 'btn', 'Use ' + c.name);
+    go.addEventListener('click', () => onChoose(c));
+    const act = el('div', 'step-actions');
+    act.appendChild(go);
+    detail.appendChild(act);
+  });
+  if (current) sel.dispatchEvent(new Event('change'));
+}
+
+function describe(c, lit) {
+  const box = el('div');
   const sheets = c.sheets.map((s) => `${s.part}${s.size ? ' ' + s.size : ''}`).join(' · ');
-  root.appendChild(el('div', 'wz-sheets', `Sheets: ${sheets}`));
-
-  // Clone-safety matters for the swap too: a swapped outfit shipped as a NEW asset clones
-  // the body's model, so a two-block body flattens exactly as it would for a variant.
-  if (goal === 'variants' || goal === 'swap') {
+  box.appendChild(el('div', 'wz-sheets', `Sheets: ${sheets || 'none of its own'}`));
+  if (lit === 'body') {
     if (c.blocks === 1) {
-      root.appendChild(el('div', 'wz-ok',
-        '✓ Clone-safe. This character keeps all its geometry in one place, so a copy of it '
+      box.appendChild(el('div', 'wz-ok',
+        '✓ Keeps full detail. All of this character\'s geometry is in one place, so a copy '
         + 'looks exactly as sharp as the original.'));
-    } else if (c.blocks === 2) {
-      root.appendChild(el('div', 'wz-warn',
-        '⚠ Cloning this one costs detail. Its finer geometry lives in a second block that a '
-        + 'clone cannot carry, so your version renders its coarsest tier at every distance — '
-        + 'the face visibly flattens. It still works, and reskinning it in place instead '
-        + 'avoids the problem entirely.'));
-    }
-    if (!c.ownSheets) {
-      root.appendChild(el('div', 'wz-note',
-        'This character has no body textures of its own — it borrows another character\'s. '
-        + 'You can still clone it, but the textures you repoint belong to someone else, so '
-        + 'check the preview carefully.'));
+    } else {
+      box.appendChild(el('div', 'wz-warn',
+        '⚠ A copy of this one loses detail. Its finer geometry lives in a second block a '
+        + 'copy cannot carry, so it renders its coarsest version at every distance and the '
+        + 'face visibly flattens. Fine if you are repainting it in place.'));
     }
   }
-
-  // --- the no-setup path ---
-  // Painting a sheet needs a template far more urgently than it needs the game's artwork,
-  // and templates carry no artwork so they can just be handed over. Someone can start
-  // designing right now and only install the toolchain when they have something to inject.
-  if (c.template && c.template.length) {
-    const n = c.template.length;
-    root.appendChild(el('div', 'wz-q', 'Start painting now — no install needed'));
-    root.appendChild(el('div', 'wz-note',
-      `${n} ready-made template${n === 1 ? '' : 's'} for this character: every UV island `
-      + 'filled flat and coloured by the body part that drives it, so you can see what you '
-      + 'are painting. Open one in any image editor and go. You only need the game tools '
-      + 'later, to put the result back in.'));
-    // The catalogue lists sheets a character OWNS by name; templates cover the sheets its
-    // model actually PAINTS at the finest detail level. Those differ on low-detail NPCs
-    // that borrow a shared body sheet, and the gap is confusing unless it is named.
-    const painted = new Set(c.template.map((f) => f.replace('_SAFE.png', '')));
-    const missing = c.sheets.filter((s) => !painted.has(s.name)).map((s) => s.part);
-    if (missing.length) {
-      root.appendChild(el('div', 'wz-note',
-        `No template for its ${missing.join(', ')} sheet${missing.length === 1 ? '' : 's'} — `
-        + 'this model does not paint them at its finest detail level, usually because it '
-        + 'borrows a shared body texture. Export it below to work on those.'));
-    }
-    const grid = el('div', 'wz-tpl');
-    for (const f of c.template) {
-      const a = el('a', 'wz-tpl-a', f.replace(c.name + '_', '').replace('_SAFE.png', ''));
-      a.href = `templates/${c.name}/${f}`;
-      a.target = '_blank';
-      a.rel = 'noopener';
-      grid.appendChild(a);
-    }
-    root.appendChild(grid);
-    const leg = el('a', 'wz-note', 'colour legend →');
-    leg.href = `templates/${c.name}/_LEGEND.png`;
-    leg.target = '_blank';
-    leg.rel = 'noopener';
-    leg.style.display = 'inline-block';
-    root.appendChild(leg);
-  } else {
-    root.appendChild(el('div', 'wz-note',
-      'No ready-made template for this character yet — export it below and the tool will '
-      + 'draw the UV layout over its real textures, which works just as well.'));
+  if (!c.sheets.some((s) => s.part === 'ub' || s.part === 'lb')) {
+    box.appendChild(el('div', 'wz-note',
+      'Its textures are named after another character — it wears someone else\'s kit. That '
+      + 'still exports and still works here; you just get the outfit it is seen in.'));
   }
+  return box;
+}
 
-  // --- who is lending the clothes ---
-  // Without this the second command reads `<the_character_whose_clothes_you_want>` and the
-  // user has to go and find a name that this page already knows. The pick does not change
-  // what the tool does -- it only fills the command in -- but that is the whole friction.
-  let donorSel = null;
-  if (goal === 'swap') {
-    // Any exportable character is a valid donor. "Owns its own sheets" is NOT the test:
-    // a character whose sheets are named after somebody else still exports a full bundle
-    // with textures -- ch_hum_starter02 is catalogued as owning nothing and ships 18 of
-    // them -- and the outfit you copy is simply the one it wears in game. Being clonable
-    // is not the test either, since only the donor's artwork and mesh are read.
-    const wardrobe = allCharacters().filter((x) => x.name !== c.name);
-    root.appendChild(el('div', 'wz-q', 'Whose clothes?'));
-    root.appendChild(el('div', 'wz-note',
-      `Any of these ${wardrobe.length} can lend an outfit — being clonable does not matter, `
-      + 'because only their artwork and body shape are read. Characters marked "wears '
-      + 'another character\'s textures" work too; you get the outfit they are seen in.'));
-    donorSel = el('select');
-    donorSel.id = 'wz-donor';
-    const byF = {};
-    for (const x of wardrobe) (byF[x.faction] = byF[x.faction] || []).push(x);
-    // An <option> with no value attribute reports its TEXT as its value, so without this
-    // the placeholder reads back as "— choose —" and lands in the generated command.
-    const ph = el('option', null, '— choose —');
-    ph.value = '';
-    donorSel.appendChild(ph);
-    for (const f of Object.keys(byF).sort()) {
-      const og = document.createElement('optgroup');
-      og.label = f;
-      for (const x of byF[f].sort((a, b) => a.name.localeCompare(b.name))) {
-        const own = x.sheets.filter((s) => s.part === 'ub' || s.part === 'lb')
-          .map((s) => s.part).join(', ');
-        const o = el('option', null,
-          `${x.name}   ${own ? `(own ${own})` : "(wears another character's textures)"}`);
-        o.value = x.name;
-        og.appendChild(o);
-      }
-      donorSel.appendChild(og);
-    }
-    root.appendChild(donorSel);
-  }
+function stepBody(body) {
+  characterPicker(body, {
+    lit: 'body',
+    current: W.body,
+    note: W.goal === 'swap'
+      ? 'Pick the character you want to BE — their body, face and build. You will pick whose clothes they wear next.'
+      : 'Pick the character you want to work on.',
+    onChoose: (c) => { W.body = c; onPick(c, W.goal); rail.complete('body'); },
+  });
+}
 
-  // --- the command ---
-  root.appendChild(el('div', 'wz-q', 'Get the character out of the game'));
-  root.appendChild(el('div', 'wz-note',
-    'You need mercs2_workshop from the community toolchain (link below). Run it with no '
-    + 'arguments first — it opens a browser where you can look at every character in 3D and '
-    + 'read its name, which is by far the easiest way to find the one you actually want. '
-    + 'The names in the dropdown above are the same ones it shows.'));
+function stepDonor(body) {
+  characterPicker(body, {
+    lit: 'clothes',
+    current: W.donor,
+    exclude: W.body,
+    note: 'Pick whoever is wearing the outfit you want. The two do not need matching texture '
+      + 'layouts — the tool re-maps the clothing through the 3D body, so any pair works.',
+    onChoose: (c) => { W.donor = c; rail.complete('donor'); },
+  });
+}
 
-  const outWrap = el('label', 'wz-field');
-  outWrap.appendChild(el('span', null, 'Where should the files go?'));
+// ---------------------------------------------------------------- 4. export
+function stepExport(body) {
+  const names = W.goal === 'swap' ? [W.body.name, W.donor.name] : [W.body.name];
+
+  body.appendChild(el('p', null,
+    names.length > 1
+      ? 'Two characters means two folders. Run both of these, then come back.'
+      : 'Run this once, then come back.'));
+
+  const f = el('label', 'wz-field');
+  f.appendChild(el('span', null, 'Where should the files go?'));
   const out = el('input');
   out.type = 'text';
-  out.id = 'wz-out';
-  out.value = 'C:\\mercs2-skins';
+  out.value = W.outDir;
   out.spellcheck = false;
-  outWrap.appendChild(out);
-  root.appendChild(outWrap);
+  f.appendChild(out);
+  body.appendChild(f);
 
   const pre = el('pre');
-  pre.id = 'wz-cmd';
-  root.appendChild(pre);
-
-  const copy = el('button', 'btn ghost', 'Copy command');
-  copy.addEventListener('click', () => {
-    navigator.clipboard.writeText(pre.textContent).then(
-      () => { copy.textContent = 'Copied'; setTimeout(() => (copy.textContent = 'Copy command'), 1400); },
-      () => { copy.textContent = 'Copy failed — select it manually'; });
-  });
-  root.appendChild(copy);
-
+  body.appendChild(pre);
   const upd = () => {
-    const dir = (out.value || 'C:\\mercs2-skins').replace(/[\\/]+$/, '');
-    // `.\` is required: PowerShell refuses to run an executable from the current directory
-    // without it, and the instructions above tell people to cd into the tool's folder.
-    const run = (n) => `.\\mercs2_workshop --export-bundle ${n} --out "${dir}"`;
-    pre.textContent = goal === 'swap'
-      // The swap needs TWO bundles, and finding that out one command at a time is the most
-      // annoying possible way to learn it. Emit both.
-      ? `${run(c.name)}\n${run(donorSel && donorSel.value ? donorSel.value
-        : '<pick whose clothes above>')}`
-      : run(c.name);
+    W.outDir = (out.value || 'C:\\mercs2-skins').replace(/[\\/]+$/, '');
+    // `.\` is required: PowerShell will not run an executable out of the current directory
+    // without it, and the instructions tell people to cd into the tool's folder.
+    pre.textContent = names
+      .map((n) => `.\\mercs2_workshop --export-bundle ${n} --out "${W.outDir}"`).join('\n');
   };
   out.addEventListener('input', upd);
-  if (donorSel) donorSel.addEventListener('change', upd);
   upd();
 
-  root.appendChild(el('div', 'wz-note', goal === 'swap'
-    ? `Run it twice — once for ${c.name} and once for whoever owns the outfit. Each writes its `
-      + 'own folder containing manifest.json, model.gltf, model.bin, textures and raw. Drop '
-      + `${c.name}'s folder in step 1, then the other one in step 1b.`
-    : `That writes ${'"'}${'{'}folder${'}'}\\${c.name}\\${'"'} containing manifest.json, model.gltf, model.bin, `
-      + 'a textures folder and a raw folder. Drag that whole character folder onto the drop '
-      + 'zone below — not the individual files.'));
+  const act = el('div', 'step-actions');
+  const copy = el('button', 'btn ghost', 'Copy');
+  copy.addEventListener('click', () => {
+    navigator.clipboard.writeText(pre.textContent).then(
+      () => { copy.textContent = 'Copied'; setTimeout(() => (copy.textContent = 'Copy'), 1400); },
+      () => { copy.textContent = 'Select it manually'; });
+  });
+  act.appendChild(copy);
+  const done = el('button', 'btn', "I've run it →");
+  done.addEventListener('click', () => rail.complete('export'));
+  act.appendChild(done);
+  body.appendChild(act);
 
-  if (goal === 'swap') {
-    root.appendChild(el('div', 'wz-note',
-      'Any character with its own textures can be the donor, including ones that cannot be '
-      + 'cloned — you are only borrowing their artwork, not their model. So the whole roster '
-      + 'is available as a wardrobe.'));
-  }
+  body.appendChild(el('div', 'wz-note',
+    `Each command writes a folder: ${names.map((n) => `${W.outDir}\\${n}\\`).join('  and  ')}. `
+    + 'You will drag those in next — the tool checks each one before letting you continue, '
+    + 'so you do not have to be sure you got it right.'));
 
-  // --- troubleshooting ---
-  const tro = el('details', 'wz-tro');
-  tro.appendChild(el('summary', null, "It didn't work — what usually goes wrong"));
+  const tips = el('details', 'wz-tro');
+  tips.appendChild(el('summary', null, 'The command did not work'));
   const ul = el('ul');
   for (const [q, a] of [
+    ['"not recognized" or nothing happens',
+      'You are not in the folder that holds mercs2_workshop.exe. cd into it first, or swap '
+      + 'the .\\ for the full path to the exe. On Windows that leading .\\ is required.'],
     ['"no model ASET for 0x…"',
-      'That name has no model of its own, so the workshop has nothing to export — it is a '
-      + 'texture set belonging to a character built from shared sub-entries. 67 such names '
-      + 'exist in the game and none of them can be used here, which is why none of them '
-      + 'appear in the pickers above. Every name this page offers has been checked against '
-      + 'the model table. If you typed a name yourself, pick it from the dropdown instead.'],
-    ['The command does nothing / "not recognised"',
-      'You are not in the folder holding mercs2_workshop.exe. cd into it first, or replace '
-      + 'the .\\ with the full path to the exe. The leading .\\ is required on Windows — '
-      + 'PowerShell will not run an executable from the current folder without it.'],
+      'That name has no model of its own and cannot be exported. Every name in the pickers '
+      + 'above has been checked, so this only happens if you typed one yourself.'],
     ['It cannot find vz.wad',
-      'Run it from your Mercenaries 2 install, or pass the game path. It reads the base WAD '
-      + 'from the install — it never modifies it.'],
-    ['I dropped the folder and the tool says it is not a bundle',
-      'Drop the folder named after the character, the one containing manifest.json. Dropping '
-      + 'its parent, or the textures folder on its own, will not work.'],
-    ['The character "has no sheets of its own" — is it still usable?',
-      'Yes. That label means its textures are named after another character, not that it '
-      + 'has none: the export still contains every texture its model draws with. It makes '
-      + 'a perfectly good body and a perfectly good outfit donor. The one thing to know is '
-      + 'that reskinning those textures in place also changes whoever else uses them.'],
-    ['My skin loaded but the face looks flattened',
-      'You cloned a two-block character. 38 of the 85 characters with a model are '
-      + 'single-block and keep full detail when cloned — those are the ones marked ✓. '
-      + 'See docs/LOD-CHAIN.md.'],
-    ['The swapped outfit looks smeared in places',
-      'The donor has no counterpart for part of that body — usually gear one character '
-      + 'carries and the other does not, like a backpack or webbing. Those areas take the '
-      + 'nearest colour available. The fit percentages in step 1b tell you which sheets are '
-      + 'affected; a donor with a similar build fixes it.'],
-    ['The game crashed to desktop when I wore it',
-      'The name did not resolve — the asset is not actually in your patch. Check the patch '
-      + 'merged correctly. There is no soft failure for a missing model.'],
+      'Run it from your Mercenaries 2 install, or pass the game path. It only ever reads '
+      + 'the base WAD — it never modifies your install.'],
+    ['I want all of them at once',
+      'tools\\extract_all.bat fetches the entire roster — 85 characters, about 20 minutes — '
+      + 'so you never have to run this again.'],
   ]) {
     const li = el('li');
     li.appendChild(el('b', null, q));
     li.appendChild(el('div', null, a));
     ul.appendChild(li);
   }
-  tro.appendChild(ul);
-  root.appendChild(tro);
+  tips.appendChild(ul);
+  body.appendChild(tips);
 }
+
+// ---------------------------------------------------------------- 5/6. load + verify
+function stepDrop(body, which) {
+  const want = which === 'body' ? W.body : W.donor;
+  body.appendChild(el('p', null,
+    `Drag in the folder named ${want.name} — the one containing manifest.json. `
+    + 'Not its parent, and not the files inside it.'));
+
+  const zone = el('label', 'drop');
+  const input = el('input');
+  input.type = 'file';
+  input.setAttribute('webkitdirectory', '');
+  input.setAttribute('directory', '');
+  input.multiple = true;
+  zone.appendChild(input);
+  zone.appendChild(el('b', null, `Drop ${want.name}`));
+  zone.appendChild(el('span', 'hint', `${W.outDir}\\${want.name}\\`));
+  body.appendChild(zone);
+
+  const out = el('div');
+  body.appendChild(out);
+
+  wireDrop(zone, input, async (files) => {
+    out.innerHTML = '';
+    if (!onNeedBundle) return;
+    let res;
+    try {
+      res = await onNeedBundle(files, which);
+    } catch (e) {
+      out.appendChild(verdict({
+        ok: false, title: 'That folder is not an export bundle',
+        lines: [{ k: 'what came in', v: `${files.length} file(s)`, ok: false }],
+        hint: (e && e.message ? e.message.split('\n')[0] : '')
+          + ' — drop the folder named after the character, the one with manifest.json in it.',
+      }));
+      return;
+    }
+
+    // ★ Check they dropped the RIGHT character, not just a valid one. Dropping the body
+    // twice, or the two folders the wrong way round, is the single easiest mistake to make
+    // here and produces a confusing result rather than an error.
+    const got = res.name;
+    const right = got.toLowerCase() === want.name.toLowerCase();
+    const sheets = res.sheets || 0;
+    const lines = [
+      { k: 'character', v: got, ok: right },
+      { k: 'expected', v: want.name },
+      { k: 'textures', v: `${res.textures} decoded`, ok: res.textures > 0 },
+      { k: 'body sheets', v: sheets ? `${sheets} painted` : 'none', ok: sheets > 0 },
+    ];
+    if (!right) {
+      out.appendChild(verdict({
+        ok: false, title: `That is ${got}, not ${want.name}`,
+        lines,
+        hint: which === 'donor'
+          ? 'You may have dropped the body folder again. The clothes folder is the second '
+            + 'character you exported.'
+          : 'Drop the folder for the character you picked, or go back and pick this one instead.',
+      }));
+      return;
+    }
+    if (!res.textures) {
+      out.appendChild(verdict({
+        ok: false, title: 'That bundle has no textures',
+        lines,
+        hint: 'The export is missing its textures folder. Re-run the command and drag the '
+          + 'whole character folder in, not just part of it.',
+      }));
+      return;
+    }
+    out.appendChild(verdict({
+      ok: true, title: `${got} loaded`,
+      lines: [
+        { k: 'textures', v: `${res.textures} decoded` },
+        { k: 'body sheets', v: `${sheets} painted` },
+        { k: 'geometry', v: `${res.tris.toLocaleString()} triangles` },
+      ],
+    }));
+    const act = el('div', 'step-actions');
+    const go = el('button', 'btn', 'Continue →');
+    go.addEventListener('click', () => {
+      if (which === 'body') { W.loadedBody = got; rail.complete('drop'); }
+      else { W.loadedDonor = got; rail.complete('drop2'); }
+      if (res.onContinue) res.onContinue();
+    });
+    act.appendChild(go);
+    out.appendChild(act);
+  });
+}
+
+export const wizardState = W;
