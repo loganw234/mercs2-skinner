@@ -21,13 +21,6 @@
   "tris": 12798
  },
  {
-  "name": "tex_0xE27C6F51",
-  "hash": "0xE27C6F51",
-  "w": 64,
-  "h": 128,
-  "tris": 2272
- },
- {
   "name": "pmc_hum_mattias_hair",
   "hash": "0xF66B8F19",
   "w": 256,
@@ -40,12 +33,5 @@
   "w": 128,
   "h": 128,
   "tris": 294
- },
- {
-  "name": "tex_0x5AAB9E8A",
-  "hash": "0x5AAB9E8A",
-  "w": 64,
-  "h": 64,
-  "tris": 298
  }
 ]

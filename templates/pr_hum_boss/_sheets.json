@@ -1,0 +1,30 @@
+[
+ {
+  "name": "pr_hum_boss_head",
+  "hash": "0xCF756C6D",
+  "w": 1024,
+  "h": 1024,
+  "tris": 2208
+ },
+ {
+  "name": "pr_hum_boss_lb",
+  "hash": "0x9BE980B1",
+  "w": 1024,
+  "h": 1024,
+  "tris": 1608
+ },
+ {
+  "name": "pr_hum_boss_ub",
+  "hash": "0x6BD6828A",
+  "w": 1024,
+  "h": 1024,
+  "tris": 5324
+ },
+ {
+  "name": "pr_hum_boss_eye",
+  "hash": "0x5EBD193E",
+  "w": 256,
+  "h": 256,
+  "tris": 288
+ }
+]

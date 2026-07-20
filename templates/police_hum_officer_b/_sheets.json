@@ -1,0 +1,16 @@
+[
+ {
+  "name": "police_hum_officer_b_head",
+  "hash": "0x347521AD",
+  "w": 256,
+  "h": 256,
+  "tris": 279
+ },
+ {
+  "name": "police_hum_officer_b_helmet",
+  "hash": "0xCF546850",
+  "w": 128,
+  "h": 128,
+  "tris": 358
+ }
+]

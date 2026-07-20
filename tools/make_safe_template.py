@@ -142,6 +142,7 @@ def build(bundle, out_dir, skeletons):
             per_sheet.setdefault(h, []).append((uv, ix, J, W))
 
     made = []
+    skipped = []
     for h, parts in per_sheet.items():
         t = tex_by_hash.get(h)
         if not t:
@@ -149,6 +150,13 @@ def build(bundle, out_dir, skeletons):
         Wd, Ht = t["width"], t["height"]
         tri_count = sum(len(ix) // 3 for _, ix, _, _ in parts)
         if tri_count < 250:
+            continue
+        # Sheets below 128px cannot produce a usable template at any density: island
+        # boundaries alone cover them. Measured across the full roster, every 64px sheet
+        # came out 99-100% ink. These are eyelashes, eye glints and shared trim -- nothing
+        # anyone paints -- so skipping them is strictly better than shipping black squares.
+        if min(Wd, Ht) < 128:
+            skipped.append((NAMES.get(h.upper(), h), "%dx%d too small to render" % (Wd, Ht)))
             continue
 
         # Supersample, then downsample at the end. A 512 head sheet can carry 16,000+
@@ -219,7 +227,12 @@ def build(bundle, out_dir, skeletons):
 
         img = img.resize((Wd, Ht), Image.LANCZOS)
         nm_out = NAMES.get(h.upper(), t.get("file", h).split("/")[-1].replace(".png", ""))
-        img.save(os.path.join(out_dir, "%s_SAFE.png" % nm_out))
+        # The image is flat fills plus anti-aliased edges, so a 64-colour palette is
+        # visually indistinguishable and about a quarter the size. That matters when the
+        # whole roster ships in the repo and over Pages.
+        img.quantize(colors=64, method=Image.MEDIANCUT,
+                     dither=Image.Dither.NONE).save(
+            os.path.join(out_dir, "%s_SAFE.png" % nm_out), optimize=True)
 
         # Wire-only layer on transparency: pure geometry, useful as a top layer in an
         # image editor. Also safe to redistribute -- there is no artwork in it.
@@ -229,9 +242,15 @@ def build(bundle, out_dir, skeletons):
             for i in range(0, len(ix) - 2, 3):
                 wd.polygon([(uv[ix[i + k]][0] * SW, uv[ix[i + k]][1] * SH) for k in range(3)],
                            outline=(255, 64, 160, 220))
-        wire.resize((Wd, Ht), Image.LANCZOS).save(os.path.join(out_dir, "%s_wire.png" % nm_out))
+        # RGBA needs FASTOCTREE (MEDIANCUT rejects alpha). The layer is one line colour
+        # over transparency, so 8 entries is ample and it drops to ~15% of the size.
+        wire.resize((Wd, Ht), Image.LANCZOS).quantize(
+            colors=8, method=Image.FASTOCTREE, dither=Image.Dither.NONE).save(
+            os.path.join(out_dir, "%s_wire.png" % nm_out), optimize=True)
         made.append((nm_out, h, Wd, Ht, tri_count))
         print("  %-30s %4dx%-4d %6d tris" % (nm_out, Wd, Ht, tri_count))
+    for nm, why in skipped:
+        print("  %-30s SKIPPED (%s)" % (nm, why))
     return made
 
 

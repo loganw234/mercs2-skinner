@@ -1,0 +1,23 @@
+[
+ {
+  "name": "vz_hum_carmona_head",
+  "hash": "0x616D04E3",
+  "w": 512,
+  "h": 512,
+  "tris": 3083
+ },
+ {
+  "name": "vz_hum_carmona_ub",
+  "hash": "0x593EB95C",
+  "w": 512,
+  "h": 512,
+  "tris": 336
+ },
+ {
+  "name": "vz_hum_carmona_hat",
+  "hash": "0x345A6700",
+  "w": 256,
+  "h": 256,
+  "tris": 3274
+ }
+]

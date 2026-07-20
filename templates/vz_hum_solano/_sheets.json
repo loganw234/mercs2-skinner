@@ -1,0 +1,23 @@
+[
+ {
+  "name": "vz_hum_solano_head",
+  "hash": "0xF8E34B9C",
+  "w": 512,
+  "h": 512,
+  "tris": 6928
+ },
+ {
+  "name": "vz_hum_solano_lb",
+  "hash": "0x20FE8634",
+  "w": 512,
+  "h": 512,
+  "tris": 1594
+ },
+ {
+  "name": "vz_hum_solano_ub",
+  "hash": "0x80A53793",
+  "w": 512,
+  "h": 512,
+  "tris": 7092
+ }
+]

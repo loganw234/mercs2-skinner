@@ -49,20 +49,6 @@
   "tris": 1873
  },
  {
-  "name": "pmc_hum_jennifer_eyelashes",
-  "hash": "0x83E4A64E",
-  "w": 64,
-  "h": 32,
-  "tris": 699
- },
- {
-  "name": "tex_0xE27C6F51",
-  "hash": "0xE27C6F51",
-  "w": 64,
-  "h": 128,
-  "tris": 1862
- },
- {
   "name": "tex_0xF32A4CF5",
   "hash": "0xF32A4CF5",
   "w": 128,
@@ -75,12 +61,5 @@
   "w": 256,
   "h": 256,
   "tris": 284
- },
- {
-  "name": "tex_0x5AAB9E8A",
-  "hash": "0x5AAB9E8A",
-  "w": 64,
-  "h": 64,
-  "tris": 312
  }
 ]

@@ -1,0 +1,16 @@
+[
+ {
+  "name": "pr_hum_starter05_sunglasses",
+  "hash": "0xFB2A4AA2",
+  "w": 128,
+  "h": 128,
+  "tris": 612
+ },
+ {
+  "name": "pr_hum_starter05_hair",
+  "hash": "0xE03FCB10",
+  "w": 128,
+  "h": 512,
+  "tris": 10386
+ }
+]

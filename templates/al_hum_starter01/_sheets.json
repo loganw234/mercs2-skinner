@@ -19,26 +19,5 @@
   "w": 256,
   "h": 256,
   "tris": 2970
- },
- {
-  "name": "tex_0x5CC3C3F6",
-  "hash": "0x5CC3C3F6",
-  "w": 64,
-  "h": 64,
-  "tris": 254
- },
- {
-  "name": "tex_0xE27C6F51",
-  "hash": "0xE27C6F51",
-  "w": 64,
-  "h": 128,
-  "tris": 1862
- },
- {
-  "name": "tex_0x5AAB9E8A",
-  "hash": "0x5AAB9E8A",
-  "w": 64,
-  "h": 64,
-  "tris": 312
  }
 ]

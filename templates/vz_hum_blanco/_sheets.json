@@ -1,0 +1,23 @@
+[
+ {
+  "name": "vz_hum_blanco_ub",
+  "hash": "0xC8916EB6",
+  "w": 512,
+  "h": 512,
+  "tris": 316
+ },
+ {
+  "name": "vz_hum_blanco_head",
+  "hash": "0xC1EE44F1",
+  "w": 512,
+  "h": 512,
+  "tris": 685
+ },
+ {
+  "name": "vz_hum_blanco_hat",
+  "hash": "0x0115D44A",
+  "w": 256,
+  "h": 256,
+  "tris": 376
+ }
+]

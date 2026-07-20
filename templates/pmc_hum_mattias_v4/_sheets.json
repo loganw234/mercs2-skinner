@@ -1,0 +1,44 @@
+[
+ {
+  "name": "pmc_hum_mattias_v4_lb",
+  "hash": "0x807ADD10",
+  "w": 512,
+  "h": 512,
+  "tris": 4574
+ },
+ {
+  "name": "pmc_hum_mattias_v4_head",
+  "hash": "0x29BC1A40",
+  "w": 512,
+  "h": 512,
+  "tris": 9871
+ },
+ {
+  "name": "pmc_hum_mattias_v4_hair",
+  "hash": "0xBD4F478A",
+  "w": 256,
+  "h": 256,
+  "tris": 4759
+ },
+ {
+  "name": "pmc_hum_mattias_v4_ub",
+  "hash": "0xF021A79F",
+  "w": 512,
+  "h": 512,
+  "tris": 6313
+ },
+ {
+  "name": "pmc_hum_mattias_v3_glasses",
+  "hash": "0xB7DCAD5D",
+  "w": 128,
+  "h": 128,
+  "tris": 592
+ },
+ {
+  "name": "pmc_hum_fiona_eyes",
+  "hash": "0x2D237115",
+  "w": 128,
+  "h": 128,
+  "tris": 294
+ }
+]

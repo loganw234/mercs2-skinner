@@ -21,13 +21,6 @@
   "tris": 1918
  },
  {
-  "name": "tex_0xE27C6F51",
-  "hash": "0xE27C6F51",
-  "w": 64,
-  "h": 128,
-  "tris": 1862
- },
- {
   "name": "oc_hum_boss_hair_new",
   "hash": "0xE13D71F4",
   "w": 512,
@@ -47,12 +40,5 @@
   "w": 128,
   "h": 128,
   "tris": 284
- },
- {
-  "name": "tex_0x5AAB9E8A",
-  "hash": "0x5AAB9E8A",
-  "w": 64,
-  "h": 64,
-  "tris": 312
  }
 ]
