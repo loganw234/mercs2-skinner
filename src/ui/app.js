@@ -5,7 +5,9 @@
 
 import { readBundle, sortBundleFiles, MISSING_HINT } from '../bundle.js';
 import { buildUcfxTexture, isPow2 } from '../texture.js';
-import { planExport, buildCommands, preflight, pandemicHashM2, hex8, sanitizeAssetName } from '../export.js';
+import { planExport, buildCommands, buildModkitMod, preflight, hex8, sanitizeAssetName } from '../export.js';
+import { setNameSource } from '../names.js';
+import { makeZip } from '../zip.js';
 import { Preview } from '../preview.js';
 
 const $ = (s) => document.querySelector(s);
@@ -22,6 +24,9 @@ const S = {
 let preview;
 
 export async function boot() {
+  // Bundled build inlines the name list; dev build fetches it. Without it the modkit
+  // export is impossible (it targets textures by name) and the UI shows bare hashes.
+  setNameSource(window.__SKINNER_NAMES__ || await fetch('./data/asset_names.txt').then((r) => r.text()));
   preview = new Preview($('#preview'));
   if (!preview.ok) $('#preview-note').textContent = 'WebGL unavailable — the 3D preview is disabled.';
 
@@ -42,6 +47,7 @@ export async function boot() {
     if (t) { t.edited = null; drawTexture(); pushToPreview(); renderExport(); renderList(); }
   });
   $('#btn-ucfx').addEventListener('click', exportUcfx);
+  $('#btn-modkit').addEventListener('click', exportModkit);
   $('#btn-png').addEventListener('click', exportPng);
   window.addEventListener('resize', () => preview.draw());
   status('Drop an export-bundle folder to begin.');
@@ -116,7 +122,8 @@ function renderList() {
     const rec = S.textures.get(t.hash);
     const row = el('button', 'tex-row' + (t.hash === S.selected ? ' sel' : ''));
     row.appendChild(el('span', 'role ' + (t.roles[0] || 'other'), t.roles.join('+') || 'unused'));
-    row.appendChild(el('span', 'thash', t.hash));
+    const d = t.described;
+    row.appendChild(el('span', 'thash', d && d.part ? d.part : (t.name || t.hash)));
     row.appendChild(el('span', 'tdim', `${t.width}×${t.height}`));
     row.appendChild(el('span', 'ttri', t.triangles ? `${t.triangles} tris` : '—'));
     if (rec && rec.edited) row.appendChild(el('span', 'badge edited', 'edited'));
@@ -131,10 +138,11 @@ function select(hash) {
   S.selected = hash;
   const t = S.bundle.textures.find((x) => x.hash === hash);
   const rec = S.textures.get(hash);
-  $('#tex-title').textContent = `${hash} · ${t.roles.join('+') || 'unused'} · ${t.width}×${t.height}`;
-  $('#tex-sub').textContent = t.triangles
-    ? `${t.triangles} triangles across ${t.primitives.length} draw group(s), finest LOD ${t.bestLod}`
-    : 'not referenced by any draw group in this bundle';
+  $('#tex-title').textContent = (t.name || hash) + ` · ${t.roles.join('+') || 'unused'} · ${t.width}×${t.height}`;
+  $('#tex-sub').textContent = (t.name ? `${hash} · ` : `${hash} · name not recovered · `) +
+    (t.triangles
+      ? `${t.triangles} triangles across ${t.primitives.length} draw group(s), finest LOD ${t.bestLod}`
+      : 'not referenced by any draw group in this bundle');
   $('#btn-revert').disabled = !(rec && rec.edited);
   drawTexture();
   pushToPreview();
@@ -201,55 +209,110 @@ async function replaceTexture(file) {
   $('#btn-revert').disabled = false;
 }
 
-function renderExport() {
-  if (!S.bundle || !S.selected) return;
-  const tex = S.bundle.textures.find((t) => t.hash === S.selected);
-  const rec = S.textures.get(S.selected);
-  if (!tex || !rec) return;
-  const plan = planExport({ bundle: S.bundle, texture: tex, skinName: S.skinName });
-  S.plan = plan;
-
-  const checks = preflight({ width: rec.width, height: rec.height, texture: tex, name: S.skinName });
-  const cw = $('#checks');
-  cw.innerHTML = '';
-  for (const c of checks) {
-    const chip = el('span', `chip ${c.ok ? 'ok' : 'bad'}`, `${c.title}: ${c.text}`);
-    chip.title = c.detail;
-    cw.appendChild(chip);
+/** Every texture the user has actually edited -- both exports work on the whole set,
+ *  because a uniform spans several sheets and shipping one leaves a half-reskinned
+ *  character. */
+function editedTextures() {
+  const out = [];
+  for (const t of S.bundle.textures) {
+    const rec = S.textures.get(t.hash);
+    if (rec && rec.edited) out.push({ texture: t, name: t.name, rec });
   }
-  $('#hashes').textContent =
-    `texture "${plan.texName}" ${hex8(plan.texHash)}   ·   model "${plan.modelName}" ${hex8(plan.modelHash)}`;
-  $('#shared-warn').hidden = !plan.sharedWarning;
-  $('#shared-warn').textContent = plan.sharedWarning || '';
-  $('#cmd').textContent = buildCommands({ bundle: S.bundle, texture: tex, plan });
-  $('#btn-ucfx').disabled = !rec.edited;
-  $('#export-hint').textContent = rec.edited ? '' : 'Replace the texture first — nothing to export yet.';
+  return out;
 }
 
-function exportUcfx() {
-  const rec = S.textures.get(S.selected);
-  const img = rec.edited || rec.original;
-  if (!isPow2(img.width) || !isPow2(img.height)) {
-    return fail(new Error(`Texture must be power-of-two; this is ${img.width}×${img.height}.`));
+function renderExport() {
+  if (!S.bundle) return;
+  const edits = editedTextures();
+  S.edits = edits;
+  const plan = planExport({ bundle: S.bundle, edits, skinName: S.skinName });
+  S.plan = plan;
+  const modkit = buildModkitMod({ bundle: S.bundle, plan, skinName: S.skinName });
+  S.modkit = modkit;
+
+  $('#edit-count').textContent = edits.length
+    ? `${edits.length} texture(s) edited: ${edits.map((e) => (e.texture.described && e.texture.described.part) || e.name || e.texture.hash).join(', ')}`
+    : 'No textures edited yet — replace one above.';
+
+  // Preflight across every edited sheet, not just the selected one.
+  const cw = $('#checks');
+  cw.innerHTML = '';
+  for (const e of edits) {
+    for (const c of preflight({ width: e.rec.width, height: e.rec.height, texture: e.texture, name: S.skinName })) {
+      if (c.ok && c.id !== 'name') continue;      // only surface problems, plus the name
+      const chip = el('span', `chip ${c.ok ? 'ok' : 'bad'}`,
+        `${(e.texture.described && e.texture.described.part) || e.texture.hash} — ${c.title}: ${c.text}`);
+      chip.title = c.detail;
+      cw.appendChild(chip);
+    }
   }
-  status('encoding DXT1…');
+  if (!cw.children.length && edits.length) cw.appendChild(el('span', 'chip ok', 'all preflight checks pass'));
+
+  $('#incomplete-warn').hidden = !plan.incompleteWarning || !edits.length;
+  $('#incomplete-warn').textContent = plan.incompleteWarning || '';
+  $('#modkit-blocked').hidden = !modkit.blocked;
+  $('#modkit-blocked').textContent = modkit.blocked || '';
+
+  $('#hashes').textContent = edits.length
+    ? `new model "${plan.modelName}" ${hex8(plan.modelHash)}  ·  ` +
+      plan.items.map((i) => `${i.texName} ${hex8(i.texHash)}`).join('  ·  ')
+    : '';
+  $('#cmd').textContent = edits.length ? buildCommands({ bundle: S.bundle, plan }) : '';
+  $('#modkit-json').textContent = modkit.mod.textures.length ? modkit.json : '';
+  $('#btn-ucfx').disabled = !edits.length;
+  $('#btn-modkit').disabled = !modkit.mod.textures.length;
+}
+
+/** Path A — modkit: PNGs + a definition. The modkit does the encode, the container, the
+ *  WAD assembly and the merge with other installed mods. */
+async function exportModkit() {
+  const zipFiles = [{ name: 'mod.json', data: new TextEncoder().encode(S.modkit.json) }];
+  for (const item of S.plan.items) {
+    if (!item.originalName) continue;             // unnamed cannot be swapped by name
+    const rec = S.textures.get(item.originalHash);
+    const cv = document.createElement('canvas');
+    cv.width = rec.width; cv.height = rec.height;
+    cv.getContext('2d').putImageData(rec.edited || rec.original, 0, 0);
+    const blob = await new Promise((r) => cv.toBlob(r, 'image/png'));
+    zipFiles.push({ name: `textures/${item.pngFile}`, data: new Uint8Array(await blob.arrayBuffer()) });
+  }
+  download(`${S.plan.modelName}-modkit.zip`, makeZip(zipFiles));
+}
+
+/** Path B — new asset: encode every edited sheet to a fully-resident UCFX container. */
+function exportUcfx() {
+  const bad = S.plan.items.filter((i) => {
+    const r = S.textures.get(i.originalHash);
+    return !isPow2(r.width) || !isPow2(r.height);
+  });
+  if (bad.length) return fail(new Error('Every texture must be power-of-two; these are not: ' +
+    bad.map((i) => `${i.originalName || i.originalHash}`).join(', ')));
+
+  status(`encoding ${S.plan.items.length} texture(s) to DXT1…`);
   setTimeout(() => {
     try {
-      const rgb = new Float32Array(img.width * img.height * 3);
-      for (let i = 0, n = img.width * img.height; i < n; i++) {
-        rgb[i * 3] = img.data[i * 4];
-        rgb[i * 3 + 1] = img.data[i * 4 + 1];
-        rgb[i * 3 + 2] = img.data[i * 4 + 2];
+      const files = [];
+      for (const item of S.plan.items) {
+        const rec = S.textures.get(item.originalHash);
+        const img = rec.edited || rec.original;
+        const rgb = new Float32Array(img.width * img.height * 3);
+        for (let i = 0, n = img.width * img.height; i < n; i++) {
+          rgb[i * 3] = img.data[i * 4];
+          rgb[i * 3 + 1] = img.data[i * 4 + 1];
+          rgb[i * 3 + 2] = img.data[i * 4 + 2];
+        }
+        files.push({
+          name: item.file,
+          data: buildUcfxTexture({ width: img.width, height: img.height, rgb, name: item.texName }),
+        });
       }
-      const bytes = buildUcfxTexture({ width: img.width, height: img.height, rgb, name: S.plan.texName });
-      download(S.plan.textureFile, bytes);
+      files.push({ name: 'build.sh', data: new TextEncoder().encode(buildCommands({ bundle: S.bundle, plan: S.plan })) });
+      download(`${S.plan.modelName}-assets.zip`, makeZip(files));
       status('');
     } catch (e) { fail(e); }
   }, 16);
 }
 
-/** Export the sheet exactly as displayed -- including the UV wireframe when it is on,
- *  because that overlay IS the template people want to open in an image editor. */
 function exportPng() {
   $('#tex-canvas').toBlob((b) => {
     const a = el('a');

@@ -10,8 +10,9 @@
 >
 > If you try it, please open an issue with what you saw.
 
-Browser tool for painting **new skins** for existing Mercenaries 2 characters — as new,
-additional assets rather than overwrites.
+Browser tool for painting new skins onto existing Mercenaries 2 characters. Exports either
+a **modkit mod** (no command line) or a **new, additional asset** that leaves the original
+character intact.
 
 Open **`dist/mercs2-skinner.html`**. One self-contained file: no install, no network, no
 server. (`open.cmd` on Windows.)
@@ -27,21 +28,34 @@ and nothing joins them up.
 So this tool draws the model's **UV wireframe over the texture**, shows the result on the
 model in 3D, and exports an engine-ready container.
 
-## Additive, not destructive
+## Two ways out, for two crowds
 
-Replacing texture `0x17DF83D8` in place changes it for **every** model that references it —
-they are shared across LOD rungs, and with 36,724 textures game-wide, very likely across
-characters too. So the export mints new assets instead:
+| | **A · Modkit mod** | **B · New asset** |
+|---|---|---|
+| for | "I just want to recolour this" | "I want a totally new skin" |
+| does | replaces the character's own textures | mints a **new** texture set + a **new** model asset |
+| you get | PNGs + `mod.json` in a zip | `.ucfx` containers + a build script |
+| packing | the modkit does everything | three commands (script included) |
+| original | restored by uninstalling the mod | never touched; both coexist |
+| in game | the character just looks different | `Player.SetOutfit(char, "your_skin")` |
 
-1. a **new texture** asset, named by you, hashed with `pandemic_hash_m2`
-2. a **new model** asset cloned from the donor's original block bytes (`raw/` in the
-   bundle), with its material references repointed at (1) via `inject_parts --repoint`
+**A** exists because the modkit already solves the hard part. Its texture-swap contract is
+just `{name, image_path}` — it does the DXT1 encode, the fully-resident container, the WAD
+assembly, the load order and the merge with your other installed mods. So this path stops
+at PNGs plus a definition and gets out of the way. That needs the texture's **engine name**,
+which the export bundle does not carry, so names are recovered by hashing a 10,047-entry
+list back through `pandemic_hash_m2` — which is also why the UI can say "upper body"
+instead of `0x17DF83D8`.
 
-The original character keeps its own texture, both coexist in one patch WAD, and the new
-one is worn with `Player.SetOutfit(char, "your_skin_name")`.
+**B** exists for skins that should be a *new outfit* rather than a replacement, and for the
+few textures whose names were never recovered (those cannot be swapped by name at all). It
+clones the donor's original block bytes into a new-hash model whose materials point at your
+textures, so the original character is untouched and yours is selectable by name.
 
-The tool warns when the texture you edited is shared by several draw groups, because
-repointing swaps it for all of them on the new model.
+Both cover **every** sheet you edited. That matters more than it sounds: this character
+splits into head / upper body / lower body / hair, so a uniform spans several textures and
+exporting one at a time gives you a repainted torso on a stock face. The tool warns when
+sheets are left original.
 
 ## Flow
 
@@ -51,8 +65,8 @@ mercs2_workshop --export-bundle <character> --out mychar
         ▼
    ★ mercs2-skinner ★     drop the folder · pick a texture · paint · preview
         │
-        ├─ <name>_diffuse.ucfx      (engine-ready, DXT1, fully resident)
-        └─ the inject_parts + smuggler + merge_patches command block
+        ├─ A: <name>-modkit.zip     (PNGs + mod.json — the modkit packs it)
+        └─ B: <name>-assets.zip     (.ucfx containers + build.sh)
 ```
 
 1. **Export a bundle** with `mercs2_workshop` (in the community project's
@@ -71,7 +85,7 @@ mercs2_workshop --export-bundle <character> --out mychar
 npm test
 ```
 
-61 assertions. The core one is byte-parity: `src/texture.js` is a port of the community
+75 assertions. The core one is byte-parity: `src/texture.js` is a port of the community
 project's `dds_to_ucfx_texture.py` (vendored under `tools/reference-python/`), which
 reverse-engineered the container layout and the fully-resident `INFO` flags — so **that
 script is the specification**, not this port.
@@ -83,6 +97,8 @@ script is the specification**, not this port.
   streaming over-read
 - UV extraction checked against a real bundle: finest LOD only, UVs inside `[0,1]`,
   index buffers in range
+- both export paths cover every edited sheet, and a texture with no recovered name is
+  *reported* rather than silently dropped from the modkit swap list
 
 The primary parity fixture is **synthetic** (`tools/make_synthetic_fixture.py`) — a
 procedural image built to be hostile to a block compressor (smooth ramps, hard checker
@@ -122,8 +138,9 @@ Not affiliated with or endorsed by EA or Pandemic Studios.
 - **Normal maps.** Mercs2 stores them as **DXT5nm** with `normal.x` in the alpha channel;
   only the DXT1 diffuse path is implemented. Their `nm_to_ucfx_dxt5nm.py` handles it today.
 - **No painting in-tool** — you round-trip through your own image editor.
-- **The additive chain is unrun.** The command block is generated from documented flags;
-  nobody has executed it end to end.
+- **Neither install path has been run end to end.** The modkit definition matches its
+  `TextureSwap {name, image_path}` contract as read from source, and the new-asset command
+  block is generated from documented flags — but nobody has packed either and launched.
 - **No texture-sharing check across characters** — the warning only covers draw groups
   within the loaded model. A texture shared with a *different* character would not be
   flagged.

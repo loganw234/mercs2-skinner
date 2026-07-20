@@ -33,70 +33,141 @@ export function sanitizeAssetName(s) {
 }
 
 /**
- * Work out what to emit for one edited texture.
- * @param {{bundle, texture, skinName, replacedBy}} o
+ * Plan an export covering EVERY edited texture, not just the selected one.
+ *
+ * A uniform spans several sheets -- this character alone splits into head / upper body /
+ * lower body / hair -- so planning one texture at a time produces a character with a
+ * repainted torso and a stock face. Both export paths take the whole edit set.
+ *
+ * @param {{bundle, edits: Array<{texture, name}>, skinName}} o
  */
-export function planExport({ bundle, texture, skinName }) {
+export function planExport({ bundle, edits, skinName }) {
   const modelName = sanitizeAssetName(skinName);
-  const texName = `${modelName}_${(texture.roles[0] || 'tex')}`;
-  const texHash = pandemicHashM2(texName);
   const modelHash = pandemicHashM2(modelName);
 
-  // Which other draw groups share this exact texture? Repointing only the edited one
-  // leaves the rest of the model on the original sheet, which is usually a surprise.
-  const sharing = bundle.textures.filter((t) => t.hash === texture.hash);
-  const alsoUsedBy = bundle.prims.filter((p) => {
+  const items = edits.map(({ texture, name }) => {
+    // Stem from the RECOVERED engine name so the new asset keeps its identity obvious.
+    // Strip the donor's own prefix first: `civ_hum_beachfemale_a_ub` under donor
+    // `civ_hum_beachfemale_a` should yield `myskin_ub`, not `myskin_a_ub`.
+    let stem;
+    if (name) {
+      const base = bundle.name || '';
+      stem = name.toLowerCase().startsWith(base.toLowerCase() + '_')
+        ? name.slice(base.length + 1)
+        : name.split('_').slice(-2).join('_');
+    } else {
+      stem = texture.roles[0] || 'tex';
+    }
+    const texName = `${modelName}_${sanitizeAssetName(stem)}`;
+    return {
+      texture,
+      originalName: name,
+      originalHash: texture.hash,
+      texName,
+      texHash: pandemicHashM2(texName),
+      file: `${texName}.ucfx`,
+      pngFile: `${name || texture.hash}.png`,
+    };
+  });
+
+  // Which draw groups reference each edited texture? Repointing swaps it for all of them
+  // on the new model, which is normally what you want but worth stating.
+  const usedBy = (hash) => bundle.prims.filter((p) => {
     const e = p.material.extras || {};
-    return e.diffuse === texture.hash || e.normal === texture.hash || e.specular === texture.hash;
+    return e.diffuse === hash || e.normal === hash || e.specular === hash;
   }).map((p) => p.name);
 
-  const rawFiles = Object.keys(bundle.manifest.lod_chain || {}).length
-    ? []
-    : (bundle.manifest.lod_chain || []).map((l) => `block${l.block}`);
+  // Textures the model uses that were NOT edited -- the "half-recoloured soldier" trap.
+  const untouched = bundle.textures.filter(
+    (t) => t.triangles > 0 && !items.some((i) => i.originalHash === t.hash));
 
   return {
-    modelName, modelHash, texName, texHash,
-    textureFile: `${texName}.ucfx`,
-    alsoUsedBy,
-    sharedWarning: alsoUsedBy.length > 1
-      ? `Texture ${texture.hash} is referenced by ${alsoUsedBy.length} draw groups ` +
-        `(${alsoUsedBy.slice(0, 3).join(', ')}${alsoUsedBy.length > 3 ? ' …' : ''}). ` +
-        `Repointing swaps it for all of them on the new model — usually what you want, ` +
-        `but check the preview.`
+    modelName, modelHash, items,
+    untouched,
+    incompleteWarning: untouched.length
+      ? `${untouched.length} texture(s) on this model are still the original: ` +
+        `${untouched.slice(0, 4).map((t) => t.name || t.hash).join(', ')}` +
+        `${untouched.length > 4 ? ' …' : ''}. A skin that only covers some sheets shows ` +
+        `up in game as a half-reskinned character.`
       : null,
-    rawFiles,
+    sharedWarning: items.some((i) => usedBy(i.originalHash).length > 1)
+      ? 'Some edited textures are referenced by several draw groups; the swap applies to ' +
+        'all of them. Check the preview.'
+      : null,
   };
 }
 
-/** The command block for the additive path. */
-export function buildCommands({ bundle, texture, plan }) {
+/** The additive path: mint NEW texture + model assets, originals untouched. */
+export function buildCommands({ bundle, plan }) {
   const lod = (bundle.manifest.lod_chain || [])[0];
   const rawName = lod ? `block${lod.block}_P000.ucfx` : 'block<N>_P000.ucfx';
+  const repoints = plan.items.map((i) => `    --repoint ${i.originalHash}:${hex8(i.texHash)}`);
+  const injects = plan.items.map((i) => `                --inject-extra ${hex8(i.texHash)}:27:${i.file} \\`);
   return [
-    `# ADDITIVE reskin of "${bundle.name}" — the original model and texture are untouched.`,
+    `# ADDITIVE reskin of "${bundle.name}" — originals untouched, this is a NEW outfit.`,
     `#`,
-    `# new texture asset : ${plan.texName}  ${hex8(plan.texHash)}`,
-    `# new model  asset : ${plan.modelName}  ${hex8(plan.modelHash)}`,
-    `# repoint          : ${texture.hash} -> ${hex8(plan.texHash)}`,
+    `# new model asset : ${plan.modelName}  ${hex8(plan.modelHash)}`,
+    ...plan.items.map((i) =>
+      `# new texture     : ${i.texName}  ${hex8(i.texHash)}   (replaces ${i.originalName || i.originalHash})`),
     ``,
     `# 1. clone the donor's ORIGINAL block bytes into a new-hash model whose materials`,
-    `#    point at your texture instead. raw/ came with the export bundle.`,
+    `#    point at your textures instead. raw/ came with the export bundle.`,
     `inject_parts raw/${rawName} ${plan.modelName}.ucfx \\`,
     `    --name-hash ${hex8(plan.modelHash)} \\`,
-    `    --repoint ${texture.hash}:${hex8(plan.texHash)}`,
+    repoints.join(' \\\n'),
     ``,
-    `# 2. put BOTH new assets into a patch WAD (texture type_id 27, model type_id 19)`,
-    `mercs2_smuggler --inject-extra ${hex8(plan.texHash)}:27:${plan.textureFile} \\`,
+    `# 2. put every new asset into a patch WAD (texture type_id 27, model type_id 19)`,
+    `mercs2_smuggler \\`,
+    ...injects,
     `                --inject-extra ${hex8(plan.modelHash)}:19:${plan.modelName}.ucfx \\`,
     `                --out ${plan.modelName}-patch.wad`,
     ``,
-    `# 3. merge into the live patch — the engine mounts exactly ONE <name>-patch.wad`,
-    `merge_patches "<game>/data/vz-patch.wad" ${plan.modelName}-patch.wad out.wad --replace`,
-    `cp out.wad "<game>/data/vz-patch.wad"`,
+    `# 3. install it. Either import the patch WAD in the modkit (which merges it with your`,
+    `#    other mods), or if you have no other patch, drop it in as data/vz-patch.wad.`,
     ``,
     `# 4. wear it in-game`,
     `#    Player.SetOutfit(Player.GetLocalCharacter(), "${plan.modelName}")`,
   ].join('\n');
+}
+
+/**
+ * The modkit path: a texture-swap mod the modkit packs itself.
+ *
+ * Its contract is just `{name, image_path}` per swap -- it does the DXT1 encode, the
+ * fully-resident container, the WAD assembly, the load order and the merging with other
+ * installed mods. So this path emits PNGs plus a definition and stops there.
+ *
+ * Swaps target a texture by NAME, which is why hash->name recovery is a hard requirement
+ * here rather than a nicety: a texture whose name was never recovered cannot be swapped
+ * this way, and is reported instead of being silently dropped.
+ */
+export function buildModkitMod({ bundle, plan, skinName }) {
+  const usable = plan.items.filter((i) => i.originalName);
+  const unnamed = plan.items.filter((i) => !i.originalName);
+  const mod = {
+    name: skinName || plan.modelName,
+    kind: 'texture-swap',
+    target: bundle.name,
+    generatedBy: 'mercs2-skinner',
+    textures: usable.map((i) => ({
+      name: i.originalName,          // engine name — what TextureSwap.name expects
+      image_path: `textures/${i.pngFile}`,
+      // context, ignored by the packer but useful to a human reading the mod
+      hash: i.originalHash,
+      size: `${i.texture.width}x${i.texture.height}`,
+      role: i.texture.roles.join('+'),
+    })),
+  };
+  return {
+    mod,
+    json: JSON.stringify(mod, null, 2),
+    unnamed,
+    blocked: unnamed.length
+      ? `${unnamed.length} edited texture(s) have no recovered engine name ` +
+        `(${unnamed.map((i) => i.originalHash).join(', ')}) and cannot be swapped by the ` +
+        `modkit, which targets textures by name. Use the new-asset export for those.`
+      : null,
+  };
 }
 
 /** Checks that stop a texture the engine will reject or mis-stream. */

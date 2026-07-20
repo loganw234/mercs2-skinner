@@ -10,6 +10,8 @@
 // This module joins them so a texture can be shown with the UV layout that actually maps
 // onto it -- without that, painting a 1024x1024 sheet is guesswork.
 
+import { nameForHash, describeName } from './names.js';
+
 const COMPONENT = {
   5120: { get: (dv, o) => dv.getInt8(o), size: 1 },
   5121: { get: (dv, o) => dv.getUint8(o), size: 1 },
@@ -101,6 +103,10 @@ export function readBundle({ manifest, gltf, bin, textureFiles = new Map() }) {
   const textures = [...byHash.values()].map((t) => ({
     ...t,
     roles: [...t.roles],
+    // Recovered engine name: makes the UI readable AND is required by the modkit export,
+    // whose swap contract targets a texture by name rather than hash.
+    name: nameForHash(t.hash),
+    described: describeName(nameForHash(t.hash)),
     // Only the finest LOD rung is worth showing UVs for; coarser rungs reuse the sheet.
     bestLod: t.groups.length ? Math.min(...t.groups.map((g) => g.lod)) : null,
   })).sort((a, b) => {

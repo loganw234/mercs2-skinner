@@ -80,6 +80,14 @@
   .badge.unverified { color:#fde68a; border-color:#5a4517; background:#2a2211;
                       letter-spacing:.06em; font-weight:600; padding:2px 8px; }
   .muted { color:var(--dim); font-size:12px; }
+  .paths { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:900px){ .paths { grid-template-columns:1fr; } }
+  .path { background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:12px; }
+  .path-h { font-weight:600; margin-bottom:6px; }
+  .path p { margin:0 0 10px; }
+  .tag { font-size:10px; font-weight:400; padding:1px 7px; border-radius:10px;
+         border:1px solid var(--line); color:var(--faint); margin-left:6px; }
+  .tag.rec { color:var(--ok); border-color:#1e5236; }
 </style>
 </head>
 <body>
@@ -149,27 +157,43 @@
   </section>
 
   <section id="step-export" hidden>
-    <h2><span class="n">3</span>Export as a new asset</h2>
+    <h2><span class="n">3</span>Export</h2>
     <div class="panel">
       <div style="max-width:420px;margin-bottom:10px">
-        <label class="muted" for="skin-name">New skin name</label>
+        <label class="muted" for="skin-name">Skin name</label>
         <input type="text" id="skin-name" placeholder="my_custom_skin">
       </div>
-      <div class="muted" id="hashes" style="font-family:ui-monospace,monospace;margin-bottom:10px"></div>
-      <div class="warnbox" id="shared-warn" hidden></div>
-      <div id="checks"></div>
-      <div class="row-tools">
-        <button class="btn" id="btn-ucfx">Download .ucfx texture</button>
-        <span class="muted" id="export-hint"></span>
-      </div>
-      <pre id="cmd" style="margin-top:12px"></pre>
-      <div class="muted" style="margin-top:10px">
-        This mints a <b>new</b> texture and a <b>new</b> model asset. The original
-        character keeps its own texture — nothing is overwritten, and both can coexist in
-        the same patch WAD.
+      <div class="muted" id="edit-count" style="margin-bottom:8px"></div>
+      <div class="warnbox" id="incomplete-warn" hidden></div>
+      <div id="checks" style="margin-bottom:12px"></div>
+      <div class="muted" id="hashes" style="font-family:ui-monospace,monospace;margin-bottom:14px"></div>
+
+      <div class="paths">
+        <div class="path">
+          <div class="path-h">A · Modkit mod <span class="tag rec">recommended</span></div>
+          <p class="muted">
+            Replaces the character's own textures. The modkit does the encode, the
+            container, the WAD packing and the merge with your other mods — no command
+            line. Best if you just want to recolour something.
+          </p>
+          <div class="warnbox" id="modkit-blocked" hidden></div>
+          <button class="btn" id="btn-modkit" disabled>Download modkit mod (.zip)</button>
+          <pre id="modkit-json" style="margin-top:10px;max-height:210px;overflow:auto"></pre>
+        </div>
+        <div class="path">
+          <div class="path-h">B · New asset <span class="tag">for a totally new skin</span></div>
+          <p class="muted">
+            Mints a <b>new</b> texture set and a <b>new</b> model asset, leaving the
+            original character untouched, so both coexist and yours is selectable by name.
+            Needs three commands (script included in the zip).
+          </p>
+          <button class="btn ghost" id="btn-ucfx" disabled>Download new-asset kit (.zip)</button>
+          <pre id="cmd" style="margin-top:10px;max-height:280px;overflow:auto"></pre>
+        </div>
       </div>
     </div>
   </section>
+
 </main>
 
 <script type="module">

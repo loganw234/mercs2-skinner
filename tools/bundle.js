@@ -76,13 +76,16 @@ if (collisions.length) {
 // ---- assemble ----
 const body = order.map((m) => `// ===== ${relative(ROOT, m.path).replace(/\\/g, '/')} =====\n${m.code}`).join('\n\n');
 
+const names = readFileSync(resolve(ROOT, 'data/asset_names.txt'), 'utf8');
 let html = readFileSync(resolve(ROOT, 'index.html'), 'utf8');
 const scriptRe = /<script type="module">[\s\S]*?<\/script>/;
 if (!scriptRe.test(html)) throw new Error('index.html: no <script type="module"> entry point found');
 html = html.replace(scriptRe,
-  // Nothing is inlined here: unlike mercs2-mesher this tool ships no bundled data --
-  // every byte it works on comes from the user's own export folder.
+  // The recovered asset-name list is the one thing that must ship inlined: fetch() cannot
+  // work from file://, and without names the modkit export is impossible (its swap
+  // contract targets a texture BY NAME) and the UI would show bare hashes.
   '<script type="module">\n' +
+  `window.__SKINNER_NAMES__ = ${JSON.stringify(names)};\n\n` +
   body + '\n\n' +
   'boot().catch((e) => {\n' +
   "  document.getElementById('error').hidden = false;\n" +
@@ -98,15 +101,15 @@ const codeOnly = html
 if (/import\.meta/.test(codeOnly)) {
   throw new Error('bundle still contains import.meta -- it would throw in the inline script');
 }
-// This tool ships no bundled data: everything comes from the user's export folder, so a
-// fetch() of a sibling file would simply fail under file://.
-if (/fetch\(['"]\.\//.test(codeOnly)) {
-  throw new Error('bundle fetches a local file, which cannot work from file://');
+// Any fetch() of a sibling file fails under file://. The asset-name list is the only such
+// dependency, and it must have been inlined as a global above.
+if (/fetch\(['"]\.\//.test(codeOnly) && !/__SKINNER_NAMES__/.test(codeOnly)) {
+  throw new Error('bundle fetches a local file but no inlined data global was emitted');
 }
 
 mkdirSync(resolve(ROOT, 'dist'), { recursive: true });
 const out = resolve(ROOT, 'dist/mercs2-skinner.html');
 writeFileSync(out, html);
-console.log(`bundled ${order.length} modules -> dist/mercs2-skinner.html ` +
+console.log(`bundled ${order.length} modules + ${(names.length/1024).toFixed(0)} KB of asset names -> dist/mercs2-skinner.html ` +
   `(${(html.length / 1024).toFixed(0)} KB)`);
 console.log('  order: ' + order.map((m) => relative(ROOT, m.path).replace(/\\/g, '/')).join(' -> '));
