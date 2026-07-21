@@ -75,8 +75,16 @@ if not exist "%LIST%" (
   exit /b 1
 )
 
-findstr /b "MODELS" "%LIST%" | findstr /c:"%FILTER%" >"%LIST%.f"
-for /f %%C in ('type "%LIST%.f" ^| find /c /v ""') do set "TOTAL=%%C"
+rem Full paths to the Windows tools, deliberately. `find` and `findstr` are also the names
+rem of completely unrelated Unix programs, and anyone with Git Bash, MSYS, Cygwin or WSL
+rem ahead of System32 on PATH gets those instead. Unix `find` reads `/c /v ""` as a
+rem directory to walk, so the script does not fail -- it hangs, scanning the whole drive,
+rem which looks exactly like a slow export.
+set "FIND=%SystemRoot%\System32\find.exe"
+set "FINDSTR=%SystemRoot%\System32\findstr.exe"
+
+"%FINDSTR%" /b "MODELS" "%LIST%" | "%FINDSTR%" /c:"%FILTER%" >"%LIST%.f"
+for /f %%C in ('type "%LIST%.f" ^| "%FIND%" /c /v ""') do set "TOTAL=%%C"
 
 if "%TOTAL%"=="0" (
   echo   Nothing in the catalogue matches "%FILTER%".
@@ -125,7 +133,7 @@ rem --- index it ----------------------------------------------------------
 rem Optional: turns the folder of bundles into a browsable catalogue. Skipped
 rem without complaint if Python is not installed -- the bundles are the point,
 rem the index is a convenience.
-where python >nul 2>&1
+"%SystemRoot%\System32\where.exe" python >nul 2>&1
 if %ERRORLEVEL%==0 (
   if exist "%~dp0index_bundles.py" (
     echo.
