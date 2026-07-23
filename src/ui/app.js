@@ -14,6 +14,7 @@ import { runSwap } from './swap.js';
 import { $, el } from './dom.js';
 import { bodySheets } from '../transfer.js';
 import { makeZip } from '../zip.js';
+import { assembleWadPatch, inspectPatch } from '../wadpatch.js';
 import { buildMask, applyShift, previewMask, maskCount, cloneImage, rgbToHsv, hsvToRgb } from '../recolor.js';
 import { Preview } from '../preview.js';
 
@@ -86,6 +87,9 @@ export async function boot() {
   });
   $('#btn-ucfx').addEventListener('click', exportUcfx);
   $('#btn-modkit').addEventListener('click', exportModkit);
+  $('#btn-wad').addEventListener('click', exportWad);
+  $('#btn-wad-new').addEventListener('click', exportWadAdditive);
+  $('#wad-merge-input').addEventListener('change', onMergeWadPicked);
   $('#btn-png').addEventListener('click', exportPng);
   wireRecolor();
   window.addEventListener('resize', () => preview.draw());
@@ -407,6 +411,27 @@ function renderExport() {
   $('#modkit-json').textContent = modkit.mod.textures.length ? modkit.json : '';
   $('#btn-ucfx').disabled = !edits.length;
   $('#btn-modkit').disabled = !modkit.mod.textures.length;
+
+  // Path C — WAD patch. Recolour (swap) needs NAMED textures, like the modkit; new-outfit
+  // (additive) needs edits + a cloneable model, like the new-asset kit.
+  const swappable = plan.items.filter((i) => i.originalName);
+  $('#btn-wad').disabled = !swappable.length;
+  $('#btn-wad-new').disabled = !edits.length;
+  const wadBlock = $('#wad-blocked');
+  // Only truly blocked when NEITHER flavour is available.
+  const blocked = !swappable.length && !edits.length;
+  wadBlock.hidden = !blocked;
+  if (blocked) wadBlock.textContent = 'Edit at least one texture to pack a WAD.';
+  $('#wad-info').textContent = edits.length
+    ? 'Recolour WAD overrides the character\'s own textures:\n'
+      + (swappable.length
+          ? swappable.map((i) => `  ${i.originalName}  ${i.originalHash}`).join('\n')
+          : '  (needs named textures — none here)')
+      + `\n\nNew-outfit WAD mints new assets under "${plan.modelName}":\n`
+      + `  ${plan.modelName}  ${hex8(plan.modelHash)}  (model)\n`
+      + plan.items.map((i) => `  ${i.texName}  ${hex8(i.texHash)}  (texture)`).join('\n')
+      + '\n\nInstall: drop vz-patch.wad into\n  …\\Mercenaries 2 World in Flames\\data\\\nthen restart the game.'
+    : '';
 }
 
 /** Path A — modkit: PNGs + a definition. The modkit does the encode, the container, the
@@ -467,6 +492,118 @@ async function exportUcfx() {
     status('');
     note(`Kit ready: ${model.counts.reduce((n, c) => n + c.n, 0)} texture reference(s) repointed `
       + 'in the model. Unzip it and double-click install.bat.');
+  } catch (e) { fail(e); }
+}
+
+/** The merge target: an existing vz-patch.wad the user drops in, so their other skins survive. */
+async function onMergeWadPicked(ev) {
+  const file = ev.target.files && ev.target.files[0];
+  const st = $('#wad-merge-status');
+  if (!file) { S.mergeWad = null; S.mergeWadInfo = null; st.textContent = ''; return; }
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const info = inspectPatch(bytes);            // throws if it is not a patch WAD
+    S.mergeWad = bytes; S.mergeWadInfo = info;
+    st.textContent = `✓ ${file.name}: ${info.overrides} existing override(s) will be kept, plus your new skin.`;
+    st.style.color = 'var(--ok)';
+  } catch (e) {
+    S.mergeWad = null; S.mergeWadInfo = null;
+    st.textContent = `✕ That is not a vz-patch.wad (${e.message}). Pick your existing PATCH, not the base vz.wad.`;
+    st.style.color = 'var(--bad)';
+  }
+}
+
+/** Path C — a drop-in vz-patch.wad that swaps the character's own textures by name (the
+ *  modkit, packed here). Optionally merged into an existing patch so other skins survive. */
+async function exportWad() {
+  const named = S.plan.items.filter((i) => i.originalName);
+  if (!named.length) return fail(new Error('A WAD swap needs textures with recovered names; '
+    + 'none of these have one. Use the new-asset kit instead.'));
+  const bad = named.filter((i) => {
+    const r = S.textures.get(i.originalHash);
+    return !isPow2(r.width) || !isPow2(r.height);
+  });
+  if (bad.length) return fail(new Error('Every texture must be power-of-two; these are not: '
+    + bad.map((i) => i.originalName || i.originalHash).join(', ')));
+
+  try {
+    status(`encoding ${named.length} texture(s) to DXT1…`);
+    await new Promise((r) => setTimeout(r, 16));   // let the status paint before the encode
+
+    const blocks = named.map((item) => {
+      const rec = S.textures.get(item.originalHash);
+      const img = rec.edited || rec.original;
+      const rgb = new Float32Array(img.width * img.height * 3);
+      for (let i = 0, n = img.width * img.height; i < n; i++) {
+        rgb[i * 3] = img.data[i * 4];
+        rgb[i * 3 + 1] = img.data[i * 4 + 1];
+        rgb[i * 3 + 2] = img.data[i * 4 + 2];
+      }
+      // Override the character's OWN texture by its original hash (typeId 27), so no new name
+      // is minted — the game resolves the swap for the existing character.
+      return {
+        container: buildUcfxTexture({ width: img.width, height: img.height, rgb, name: item.originalName }),
+        hash: Number(item.originalHash) >>> 0,
+        typeId: 27,
+        name: item.originalName,
+      };
+    });
+
+    const existing = S.mergeWad || null;
+    const wad = assembleWadPatch(blocks, existing);
+    download('vz-patch.wad', wad);
+    status('');
+    note(`vz-patch.wad ready — ${blocks.length} texture override(s)`
+      + (existing ? `, merged into your patch (${S.mergeWadInfo.overrides} kept). ` : '. ')
+      + 'Put it in …\\Mercenaries 2 World in Flames\\data\\ and restart the game.');
+  } catch (e) { fail(e); }
+}
+
+/** Path C, additive — a drop-in vz-patch.wad that mints a NEW model + NEW textures under new
+ *  names (the new-asset kit, packed here), leaving the original character untouched. Optionally
+ *  merged into an existing patch. */
+async function exportWadAdditive() {
+  const bad = S.plan.items.filter((i) => {
+    const r = S.textures.get(i.originalHash);
+    return !isPow2(r.width) || !isPow2(r.height);
+  });
+  if (bad.length) return fail(new Error('Every texture must be power-of-two; these are not: '
+    + bad.map((i) => i.originalName || i.originalHash).join(', ')));
+
+  try {
+    status('cloning the model…');
+    const model = await buildRepointedModel();   // needs the bundle's raw/ folder; fails early if absent
+
+    status(`encoding ${S.plan.items.length} texture(s) to DXT1…`);
+    await new Promise((r) => setTimeout(r, 16));
+
+    const blocks = S.plan.items.map((item) => {
+      const rec = S.textures.get(item.originalHash);
+      const img = rec.edited || rec.original;
+      const rgb = new Float32Array(img.width * img.height * 3);
+      for (let i = 0, n = img.width * img.height; i < n; i++) {
+        rgb[i * 3] = img.data[i * 4];
+        rgb[i * 3 + 1] = img.data[i * 4 + 1];
+        rgb[i * 3 + 2] = img.data[i * 4 + 2];
+      }
+      // NEW texture under a new name/hash (typeId 27).
+      return {
+        container: buildUcfxTexture({ width: img.width, height: img.height, rgb, name: item.texName }),
+        hash: item.texHash >>> 0,
+        typeId: 27,
+        name: item.texName,
+      };
+    });
+    // The repointed model that references those new textures (typeId 19).
+    blocks.push({ container: model.bytes, hash: S.plan.modelHash >>> 0, typeId: 19, name: S.plan.modelName });
+
+    const existing = S.mergeWad || null;
+    const wad = assembleWadPatch(blocks, existing);
+    download('vz-patch.wad', wad);
+    status('');
+    note(`vz-patch.wad ready — new outfit "${S.plan.modelName}" (${blocks.length} new asset(s), model + textures)`
+      + (existing ? `, merged into your patch (${S.mergeWadInfo.overrides} kept). ` : '. ')
+      + 'It coexists with the original. Put it in …\\data\\, restart, and select it by name in game.');
   } catch (e) { fail(e); }
 }
 

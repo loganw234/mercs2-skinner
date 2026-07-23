@@ -81,7 +81,10 @@ const donors = readFileSync(resolve(ROOT, 'data/donors.json'), 'utf8');
 let html = readFileSync(resolve(ROOT, 'index.html'), 'utf8');
 const scriptRe = /<script type="module">[\s\S]*?<\/script>/;
 if (!scriptRe.test(html)) throw new Error('index.html: no <script type="module"> entry point found');
-html = html.replace(scriptRe,
+// A FUNCTION replacer, not a string: a string replacement interprets `$`-patterns ($&, $`,
+// $', $$), and module bodies legitimately contain them (e.g. a `$` DOM helper), which would
+// splice page HTML into the script. A function return is inserted verbatim.
+html = html.replace(scriptRe, () =>
   // The recovered asset-name list is the one thing that must ship inlined: fetch() cannot
   // work from file://, and without names the modkit export is impossible (its swap
   // contract targets a texture BY NAME) and the UI would show bare hashes.

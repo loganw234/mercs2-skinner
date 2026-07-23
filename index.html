@@ -380,6 +380,24 @@
           <button class="btn ghost" id="btn-ucfx" disabled>Download new-asset kit (.zip)</button>
           <pre id="cmd" style="margin-top:10px;max-height:280px;overflow:auto"></pre>
         </div>
+        <div class="path">
+          <div class="path-h">C · WAD patch <span class="tag rec">drop-in, no tools</span></div>
+          <p class="muted">
+            A ready-to-use <b>vz-patch.wad</b> — no smuggler, no command line. Either flavour
+            of the export above, packed for you: <b>recolour</b> the character in place (like A),
+            or add your skin as a <b>new outfit</b> (like B). Drop it into your game's
+            <code>data</code> folder and restart.
+          </p>
+          <div class="warnbox" id="wad-blocked" hidden></div>
+          <button class="btn" id="btn-wad" disabled style="margin-right:8px">Recolour WAD — swap in place</button>
+          <button class="btn ghost" id="btn-wad-new" disabled>New-outfit WAD — additive</button>
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
+            <label class="muted" for="wad-merge-input">Already have a <b>vz-patch.wad</b>? Merge into it (keeps every skin already in it):</label>
+            <input type="file" id="wad-merge-input" accept=".wad" style="display:block;margin-top:6px">
+            <div class="muted" id="wad-merge-status" style="margin-top:6px"></div>
+          </div>
+          <pre id="wad-info" style="margin-top:10px;max-height:210px;overflow:auto"></pre>
+        </div>
       </div>
     </div>
   </section>
