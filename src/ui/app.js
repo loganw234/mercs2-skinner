@@ -491,7 +491,8 @@ async function exportUcfx() {
     download(`${S.plan.modelName}-assets.zip`, makeZip(files));
     status('');
     note(`Kit ready: ${model.counts.reduce((n, c) => n + c.n, 0)} texture reference(s) repointed `
-      + 'in the model. Unzip it and double-click install.bat.');
+      + 'in the model. Unzip it and double-click install.bat — or, with no command line, drop '
+      + 'the zip into wad.mercs2.tools ("Pack a skinner export") to get a ready vz-patch.wad.');
   } catch (e) { fail(e); }
 }
 

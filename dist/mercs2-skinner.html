@@ -375,7 +375,10 @@
           <p class="muted">
             Mints a <b>new</b> texture set and a <b>new</b> model asset, leaving the
             original character untouched, so both coexist and yours is selectable by name.
-            Needs three commands (script included in the zip).
+            The zip ships an <code>install.bat</code>, or — no command line — drop the zip
+            straight into
+            <a href="https://wad.mercs2.tools/" target="_blank" rel="noopener">wad.mercs2.tools</a>
+            (its “Pack a skinner export” card) to get a ready <b>vz-patch.wad</b>.
           </p>
           <button class="btn ghost" id="btn-ucfx" disabled>Download new-asset kit (.zip)</button>
           <pre id="cmd" style="margin-top:10px;max-height:280px;overflow:auto"></pre>
@@ -617,6 +620,10 @@ function buildNotes({ bundle, plan }) {
     'WHAT IT DOES',
     '  Packs the files above into a patch WAD holding only NEW assets under NEW names.',
     '  Your game files are read and never written. Nothing that already exists changes.',
+    '',
+    'NO COMMAND LINE? Drop this whole .zip into  https://wad.mercs2.tools',
+    '  (the "Pack a skinner export" card) and it builds the vz-patch.wad for you —',
+    '  in the browser, nothing uploaded. Same result as install.bat.',
     '',
     'IF YOU ARE NOT ON WINDOWS, the one command is:',
     `  mercs2_smuggler --source-wad "<game>/data/vz.wad" --extra-only \\`,
@@ -7014,7 +7021,8 @@ async function exportUcfx() {
     download(`${S.plan.modelName}-assets.zip`, makeZip(files));
     status('');
     note(`Kit ready: ${model.counts.reduce((n, c) => n + c.n, 0)} texture reference(s) repointed `
-      + 'in the model. Unzip it and double-click install.bat.');
+      + 'in the model. Unzip it and double-click install.bat — or, with no command line, drop '
+      + 'the zip into wad.mercs2.tools ("Pack a skinner export") to get a ready vz-patch.wad.');
   } catch (e) { fail(e); }
 }
 
