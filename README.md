@@ -32,6 +32,8 @@ result; this way the first thing you ship is still something you chose.
 
 ---
 
+![Step 1: four cards — add new outfits, change how someone looks, wear someone else's outfit, or walk a finished example end to end](docs/screenshots/start.png)
+
 ## Status: confirmed working in game
 
 **256 custom skins, loaded and cycled in a running game** (2026-07-20). Everything below is
